@@ -1,0 +1,55 @@
+use('orfarchiv');
+
+db.news
+  .aggregate([
+    {
+      $search: {
+        compound: {
+          must: [
+            {
+              range: {
+                gte: ISODate('2022-01-01T00:00:00+01:00'),
+                lte: ISODate('2022-12-31T23:59:59+01:00'),
+                path: 'timestamp',
+              },
+            },
+          ],
+          should: [
+            {
+              text: {
+                query: 'magenta',
+                path: 'title',
+                fuzzy: {},
+              },
+            },
+          ],
+        },
+      },
+    },
+    {
+      $limit: 100,
+    },
+    {
+      $project: {
+        _id: 0,
+        id: 1,
+        title: 1,
+        category: 1,
+        url: 1,
+        timestamp: 1,
+        source: 1,
+        score: { $meta: 'searchScore' },
+      },
+    },
+    {
+      $match: {
+        score: { $gt: 3 },
+      },
+    },
+    {
+      $project: {
+        score: 0,
+      },
+    },
+  ])
+  .toArray();
