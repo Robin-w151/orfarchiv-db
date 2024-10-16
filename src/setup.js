@@ -1,5 +1,5 @@
-const logger = require('./logger');
-const { MongoClient } = require('mongodb');
+import logger from './logger.js';
+import { MongoClient } from 'mongodb';
 
 main().catch(logger.error);
 

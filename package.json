@@ -1,10 +1,12 @@
 {
   "name": "db",
-  "version": "2.1.10",
+  "version": "2.2.0",
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "backup": "node src/backup.js",
-    "setup": "node src/setup.js"
+    "setup": "node src/setup.js",
+    "lint": "prettier --check . && eslint ."
   },
   "dependencies": {
     "dotenv-flow": "^4.1.0",
@@ -12,12 +14,12 @@
     "winston": "^3.15.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.8",
     "@babel/eslint-parser": "^7.25.8",
-    "eslint": "8.57.1",
+    "eslint": "^9.12.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.2.1",
+    "globals": "^15.11.0",
     "prettier": "^3.2.5"
   }
 }

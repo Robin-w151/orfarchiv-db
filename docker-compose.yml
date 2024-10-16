@@ -2,22 +2,22 @@ version: '3.8'
 services:
   orfarchiv-db:
     image: mongo
-    networks:
-      - orfarchiv-db-network
     ports:
       - '27017:27017'
-    volumes:
-      - orfarchiv:/data/db
-    restart: always
-  orfarchiv-db-ui:
-    image: mongo-express
     networks:
       - orfarchiv-db-network
-    ports:
-      - '3002:8081'
+    volumes:
+      - orfarchiv:/data/db
+    restart: unless-stopped
+  orfarchiv-db-ui:
+    image: mongo-express
     environment:
       - ME_CONFIG_MONGODB_SERVER=orfarchiv-db
-    restart: always
+    ports:
+      - '3002:8081'
+    networks:
+      - orfarchiv-db-network
+    restart: unless-stopped
 networks:
   orfarchiv-db-network:
 volumes:

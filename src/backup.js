@@ -1,8 +1,10 @@
-const logger = require('./logger');
-const { MongoClient } = require('mongodb');
-const { join } = require('path');
-const { writeFile, mkdir } = require('fs').promises;
-require('dotenv-flow').config({ silent: true });
+import logger from './logger.js';
+import { MongoClient } from 'mongodb';
+import { join } from 'path';
+import { writeFile, mkdir } from 'fs/promises';
+import dotenv from 'dotenv-flow';
+
+dotenv.config({ silent: true });
 
 main().catch(logger.error);
 
