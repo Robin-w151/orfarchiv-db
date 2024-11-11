@@ -11,7 +11,7 @@
   "dependencies": {
     "dotenv-flow": "^4.1.0",
     "mongodb": "^6.10.0",
-    "winston": "^3.16.0"
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.25.9",
