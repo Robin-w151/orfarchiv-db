@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "dotenv-flow": "^4.1.0",
-    "mongodb": "^6.10.0",
+    "mongodb": "^6.11.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
