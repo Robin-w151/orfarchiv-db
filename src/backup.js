@@ -1,14 +1,85 @@
-import logger from './logger.js';
+import dotenv from 'dotenv-flow';
+import { mkdir, readFile, writeFile } from 'fs/promises';
+import meow from 'meow';
 import { MongoClient } from 'mongodb';
 import { join } from 'path';
-import { writeFile, mkdir } from 'fs/promises';
-import dotenv from 'dotenv-flow';
+import { timer } from 'rxjs';
+import { exhaustMap } from 'rxjs/operators';
+import logger from './logger.js';
 
 dotenv.config({ silent: true });
 
 main().catch(logger.error);
 
 async function main() {
+  const cli = meow(
+    `
+    Usage
+      $ db-backup
+
+    Options
+      --keep-running  Keep running until interrupted
+      --interval      Interval in hours (default: 24)
+
+    Examples
+      $ db-backup
+      $ db-backup --keep-running --interval 1
+    `,
+    {
+      importMeta: import.meta,
+      flags: {
+        keepRunning: {
+          type: 'boolean',
+          default: false,
+        },
+        interval: {
+          type: 'number',
+          default: 24,
+        },
+      },
+    },
+  );
+
+  await setup();
+
+  const { keepRunning = false, interval = 24 } = cli.flags;
+
+  if (keepRunning) {
+    timer(0, interval * 3_600_000)
+      .pipe(
+        exhaustMap(async () => {
+          await run();
+        }),
+      )
+      .subscribe();
+  } else {
+    await run();
+  }
+}
+
+async function setup() {
+  const orfArchivDbUrlFile = process.env['ORFARCHIV_DB_URL_FILE'];
+  if (orfArchivDbUrlFile) {
+    try {
+      const orfArchivDbUrl = await readFile(orfArchivDbUrlFile, 'utf8');
+      process.env['ORFARCHIV_DB_URL'] = orfArchivDbUrl.trim();
+    } catch (error) {
+      logger.error(error.message);
+    }
+  }
+
+  const orfArchivBackupDirFile = process.env['ORFARCHIV_BACKUP_DIR_FILE'];
+  if (orfArchivBackupDirFile) {
+    try {
+      const orfArchivBackupDir = await readFile(orfArchivBackupDirFile, 'utf8');
+      process.env['ORFARCHIV_BACKUP_DIR'] = orfArchivBackupDir.trim();
+    } catch (error) {
+      logger.error(error.message);
+    }
+  }
+}
+
+async function run() {
   try {
     await exportNews();
   } catch (error) {
@@ -28,6 +99,7 @@ async function exportNews() {
   await mkdir(backupPath, { recursive: true });
   const backupFilePath = join(backupPath, `${timestamp}.json`);
   await writeFile(backupFilePath, JSON.stringify(news), { flag: 'w' });
+  logger.info(`Backup file ${backupFilePath} created.`);
 }
 
 async function withOrfArchivDb(handler) {

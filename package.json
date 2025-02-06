@@ -6,20 +6,32 @@
   "scripts": {
     "backup": "node src/backup.js",
     "setup": "node src/setup.js",
-    "lint": "prettier --check . && eslint ."
+    "lint": "prettier --check . && eslint .",
+    "prepare": "husky"
   },
   "dependencies": {
     "dotenv-flow": "^4.1.0",
+    "meow": "^13.2.0",
     "mongodb": "^6.13.0",
+    "rxjs": "^7.8.1",
     "winston": "^3.17.0"
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.26.5",
+    "@commitlint/cli": "^19.7.1",
+    "@commitlint/config-conventional": "^19.7.1",
+    "@semantic-release/git": "^10.0.1",
     "eslint": "^9.19.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.2.3",
     "globals": "^15.14.0",
-    "prettier": "^3.4.2"
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3",
+    "prettier": "^3.4.2",
+    "semantic-release": "^24.2.1"
+  },
+  "overrides": {
+    "conventional-changelog-conventionalcommits": ">=8.0.0"
   }
 }
