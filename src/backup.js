@@ -1,10 +1,9 @@
+import { CronJob } from 'cron';
 import dotenv from 'dotenv-flow';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import meow from 'meow';
 import { MongoClient } from 'mongodb';
 import { join } from 'path';
-import { timer } from 'rxjs';
-import { exhaustMap } from 'rxjs/operators';
 import logger from './logger.js';
 
 dotenv.config({ silent: true });
@@ -19,11 +18,11 @@ async function main() {
 
     Options
       --keep-running  Keep running until interrupted
-      --interval      Interval in hours (default: 24)
+      --cron          Interval in cron syntax (default: 0 0 3 * * *, e.g. backup every day at 3am)
 
     Examples
       $ db-backup
-      $ db-backup --keep-running --interval 1
+      $ db-backup --keep-running --cron "0 0 3 * * *"
     `,
     {
       importMeta: import.meta,
@@ -32,9 +31,9 @@ async function main() {
           type: 'boolean',
           default: false,
         },
-        interval: {
-          type: 'number',
-          default: 24,
+        cron: {
+          type: 'string',
+          default: '0 0 3 * * *',
         },
       },
     },
@@ -42,16 +41,16 @@ async function main() {
 
   await setup();
 
-  const { keepRunning = false, interval = 24 } = cli.flags;
+  const { keepRunning, cron } = cli.flags;
 
   if (keepRunning) {
-    timer(0, interval * 3_600_000)
-      .pipe(
-        exhaustMap(async () => {
-          await run();
-        }),
-      )
-      .subscribe();
+    CronJob.from({
+      cronTime: cron,
+      onTick: () => {
+        run();
+      },
+      start: true,
+    });
   } else {
     await run();
   }
