@@ -2,15 +2,15 @@ import { CronJob } from 'cron';
 import dotenv from 'dotenv-flow';
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import meow from 'meow';
-import { MongoClient } from 'mongodb';
+import { Collection, MongoClient, type WithId } from 'mongodb';
 import { join } from 'path';
-import logger from './logger.js';
+import logger from './logger.ts';
 
 dotenv.config({ silent: true });
 
 main().catch(logger.error);
 
-async function main() {
+async function main(): Promise<void> {
   const cli = meow(
     `
     Usage
@@ -56,14 +56,14 @@ async function main() {
   }
 }
 
-async function setup() {
+async function setup(): Promise<void> {
   const orfArchivDbUrlFile = process.env['ORFARCHIV_DB_URL_FILE'];
   if (orfArchivDbUrlFile) {
     try {
       const orfArchivDbUrl = await readFile(orfArchivDbUrlFile, 'utf8');
       process.env['ORFARCHIV_DB_URL'] = orfArchivDbUrl.trim();
     } catch (error) {
-      logger.error(error.message);
+      logger.error((error as Error).message);
     }
   }
 
@@ -73,20 +73,20 @@ async function setup() {
       const orfArchivBackupDir = await readFile(orfArchivBackupDirFile, 'utf8');
       process.env['ORFARCHIV_BACKUP_DIR'] = orfArchivBackupDir.trim();
     } catch (error) {
-      logger.error(error.message);
+      logger.error((error as Error).message);
     }
   }
 }
 
-async function run() {
+async function run(): Promise<void> {
   try {
     await exportNews();
   } catch (error) {
-    logger.error(error.message);
+    logger.error((error as Error).message);
   }
 }
 
-async function exportNews() {
+async function exportNews(): Promise<void> {
   const news = await withOrfArchivDb(async (newsCollection) => {
     logger.info('Fetching data...');
     return newsCollection.find().sort({ timestamp: -1 }).toArray();
@@ -101,23 +101,25 @@ async function exportNews() {
   logger.info(`Backup file ${backupFilePath} created.`);
 }
 
-async function withOrfArchivDb(handler) {
+async function withOrfArchivDb(
+  handler: (newsCollection: Collection<Document>) => Promise<WithId<Document>[]>,
+): Promise<WithId<Document>[]> {
   logger.info('Connecting to DB...');
   const url = process.env.ORFARCHIV_DB_URL?.trim() || 'mongodb://localhost';
   let client;
   try {
     client = await MongoClient.connect(url);
     const db = client.db('orfarchiv');
-    const newsCollection = db.collection('news');
+    const newsCollection = db.collection<Document>('news');
     return await handler(newsCollection);
   } catch (error) {
-    throw new Error(`DB error. Cause ${error.message}`);
+    throw new Error(`DB error. Cause ${(error as Error).message}`);
   } finally {
     await client?.close();
   }
 }
 
-function getTimestamp() {
+function getTimestamp(): string {
   const now = new Date();
   const nowString = now.toISOString();
   return nowString.replaceAll(':', '').split('.')[0] + 'Z';

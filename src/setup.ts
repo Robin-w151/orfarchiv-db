@@ -1,9 +1,9 @@
-import logger from './logger.js';
-import { MongoClient } from 'mongodb';
+import logger from './logger.ts';
+import { MongoClient, type IndexDescription } from 'mongodb';
 
 main().catch(logger.error);
 
-async function main() {
+async function main(): Promise<void> {
   logger.info('Connecting to server...');
   const url = process.env.ORFARCHIV_DB_URL?.trim() || 'mongodb://localhost';
   const client = await MongoClient.connect(url);
@@ -29,7 +29,7 @@ async function main() {
       {
         timestamp: -1,
       },
-    ]);
+    ] as unknown as IndexDescription[]);
   }
 
   await client.close();
