@@ -1,18 +1,48 @@
-import { CronJob } from 'cron';
+import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { Cron, Duration, Effect, pipe, Schedule } from 'effect';
+import type { TimeoutException } from 'effect/Cause';
+import { mkdir, writeFile } from 'fs/promises';
 import meow from 'meow';
 import { Collection, MongoClient, type WithId } from 'mongodb';
 import { join } from 'path';
-import logger from './logger.ts';
+import { backupDir, dbConnectionUrl } from './env.ts';
+import { DatabaseError, IOError } from './error.ts';
+import { loggerLayer } from './logger.ts';
 
 dotenv.config({ silent: true });
 
-main().catch(logger.error);
+pipe(
+  Effect.matchEffect(main(), {
+    onSuccess: () => Effect.void,
+    onFailure: (error) =>
+      Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`),
+  }),
+  Effect.provide(loggerLayer),
+  NodeRuntime.runMain({ disablePrettyLogger: true }),
+);
 
-async function main(): Promise<void> {
-  const cli = meow(
-    `
+function main(): Effect.Effect<void, Error> {
+  return Effect.gen(function* () {
+    const cli = yield* parseArgs();
+    const { keepRunning, cron } = cli.flags;
+
+    if (keepRunning) {
+      const schedule = Schedule.cron(Cron.unsafeParse(cron));
+      yield* Effect.schedule(
+        run().pipe(Effect.catchTag('TimeoutException', () => Effect.logWarning('Scheduled task ran into a timeout'))),
+        schedule,
+      );
+    } else {
+      yield* run();
+    }
+  });
+}
+
+function parseArgs() {
+  return Effect.try(() =>
+    meow(
+      `
     Usage
       $ db-backup
 
@@ -24,99 +54,78 @@ async function main(): Promise<void> {
       $ db-backup
       $ db-backup --keep-running --cron "0 0 3 * * *"
     `,
-    {
-      importMeta: import.meta,
-      flags: {
-        keepRunning: {
-          type: 'boolean',
-          default: false,
-        },
-        cron: {
-          type: 'string',
-          default: '0 0 3 * * *',
+      {
+        importMeta: import.meta,
+        flags: {
+          keepRunning: {
+            type: 'boolean',
+            default: false,
+          },
+          cron: {
+            type: 'string',
+            default: '0 0 3 * * *',
+          },
         },
       },
-    },
+    ),
   );
+}
 
-  await setup();
+function run(): Effect.Effect<void, DatabaseError | IOError | TimeoutException> {
+  return exportNews().pipe(Effect.timeout(Duration.minutes(5)));
+}
 
-  const { keepRunning, cron } = cli.flags;
+function exportNews(): Effect.Effect<void, DatabaseError | IOError> {
+  return Effect.gen(function* () {
+    yield* Effect.log('Fetching data...');
+    const news = yield* withOrfArchivDb((newsCollection) =>
+      Effect.tryPromise({
+        try: () => newsCollection.find().sort({ timestamp: -1 }).toArray(),
+        catch: (error) => new DatabaseError({ message: 'Failed to fetch data.', cause: error }),
+      }),
+    );
 
-  if (keepRunning) {
-    CronJob.from({
-      cronTime: cron,
-      onTick: () => {
-        run();
-      },
-      start: true,
+    yield* Effect.log('Persisting data to backup file...');
+    const timestamp = getTimestamp();
+    const backupPath = yield* backupDir();
+    const backupFilePath = join(backupPath, `${timestamp}.json`);
+
+    yield* Effect.tryPromise({
+      try: () => mkdir(backupPath, { recursive: true }),
+      catch: (error) => new IOError({ message: 'Failed to create backup directory.', cause: error }),
     });
-  } else {
-    await run();
-  }
-}
+    yield* Effect.tryPromise({
+      try: () => writeFile(backupFilePath, JSON.stringify(news), { flag: 'w' }),
+      catch: (error) => new IOError({ message: 'Failed to write backup file.', cause: error }),
+    });
 
-async function setup(): Promise<void> {
-  const orfArchivDbUrlFile = process.env['ORFARCHIV_DB_URL_FILE'];
-  if (orfArchivDbUrlFile) {
-    try {
-      const orfArchivDbUrl = await readFile(orfArchivDbUrlFile, 'utf8');
-      process.env['ORFARCHIV_DB_URL'] = orfArchivDbUrl.trim();
-    } catch (error) {
-      logger.error((error as Error).message);
-    }
-  }
-
-  const orfArchivBackupDirFile = process.env['ORFARCHIV_BACKUP_DIR_FILE'];
-  if (orfArchivBackupDirFile) {
-    try {
-      const orfArchivBackupDir = await readFile(orfArchivBackupDirFile, 'utf8');
-      process.env['ORFARCHIV_BACKUP_DIR'] = orfArchivBackupDir.trim();
-    } catch (error) {
-      logger.error((error as Error).message);
-    }
-  }
-}
-
-async function run(): Promise<void> {
-  try {
-    await exportNews();
-  } catch (error) {
-    logger.error((error as Error).message);
-  }
-}
-
-async function exportNews(): Promise<void> {
-  const news = await withOrfArchivDb(async (newsCollection) => {
-    logger.info('Fetching data...');
-    return newsCollection.find().sort({ timestamp: -1 }).toArray();
+    yield* Effect.log(`Backup file ${backupFilePath} created.`);
   });
-
-  logger.info('Persisting data to backup file...');
-  const timestamp = getTimestamp();
-  const backupPath = join(process.env.ORFARCHIV_BACKUP_DIR || '.backup');
-  await mkdir(backupPath, { recursive: true });
-  const backupFilePath = join(backupPath, `${timestamp}.json`);
-  await writeFile(backupFilePath, JSON.stringify(news), { flag: 'w' });
-  logger.info(`Backup file ${backupFilePath} created.`);
 }
 
-async function withOrfArchivDb(
-  handler: (newsCollection: Collection<Document>) => Promise<WithId<Document>[]>,
-): Promise<WithId<Document>[]> {
-  logger.info('Connecting to DB...');
-  const url = process.env.ORFARCHIV_DB_URL?.trim() || 'mongodb://localhost';
-  let client;
-  try {
-    client = await MongoClient.connect(url);
-    const db = client.db('orfarchiv');
-    const newsCollection = db.collection<Document>('news');
-    return await handler(newsCollection);
-  } catch (error) {
-    throw new Error(`DB error. Cause ${(error as Error).message}`);
-  } finally {
-    await client?.close();
-  }
+function withOrfArchivDb(
+  handler: (newsCollection: Collection<Document>) => Effect.Effect<WithId<Document>[], DatabaseError>,
+): Effect.Effect<WithId<Document>[], DatabaseError> {
+  return Effect.gen(function* () {
+    yield* Effect.log('Connecting to DB...');
+    const url = yield* dbConnectionUrl();
+
+    return yield* Effect.acquireUseRelease(
+      Effect.tryPromise({
+        try: async () => {
+          const client = await MongoClient.connect(url);
+          const db = client.db('orfarchiv');
+          const newsCollection: Collection<Document> = db.collection('news');
+          return { client, newsCollection };
+        },
+        catch: (error) => {
+          return new DatabaseError({ message: 'Failed to connect to DB.', cause: error });
+        },
+      }),
+      ({ newsCollection }) => handler(newsCollection),
+      ({ client }) => Effect.promise(() => client.close()),
+    );
+  });
 }
 
 function getTimestamp(): string {

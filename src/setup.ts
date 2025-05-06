@@ -1,37 +1,83 @@
-import logger from './logger.ts';
+import { NodeRuntime } from '@effect/platform-node';
+import { Effect, pipe } from 'effect';
 import { MongoClient, type IndexDescription } from 'mongodb';
+import { dbConnectionUrl } from './env.ts';
+import { DatabaseError } from './error.ts';
+import { loggerLayer } from './logger.ts';
 
-main().catch(logger.error);
+pipe(
+  Effect.matchEffect(main(), {
+    onSuccess: () => Effect.void,
+    onFailure: (error) =>
+      Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`),
+  }),
+  Effect.provide(loggerLayer),
+  NodeRuntime.runMain({ disablePrettyLogger: true }),
+);
 
-async function main(): Promise<void> {
-  logger.info('Connecting to server...');
-  const url = process.env.ORFARCHIV_DB_URL?.trim() || 'mongodb://localhost';
-  const client = await MongoClient.connect(url);
+function main(): Effect.Effect<void, Error> {
+  return Effect.gen(function* () {
+    yield* Effect.log('Connecting to server...');
+    const url = yield* dbConnectionUrl();
 
-  logger.info('Creating orfarchiv DB...');
-  const db = client.db('orfarchiv');
+    yield* Effect.acquireUseRelease(
+      Effect.tryPromise({
+        try: () => {
+          return MongoClient.connect(url);
+        },
+        catch: (error) => {
+          return new DatabaseError({ message: 'Connection to DB failed.', cause: error });
+        },
+      }),
+      (client) => setupDb(client),
+      (client) => Effect.promise(() => client.close()),
+    );
 
-  logger.info('Creating news collection...');
-  const collections = await db.collections();
-  if (!collections.find((collection) => collection.collectionName === 'news')) {
-    await db.createCollection('news');
-    const news = db.collection('news');
-    await news.createIndexes([
-      {
-        id: 1,
-      },
-      {
-        id: -1,
-      },
-      {
-        timestamp: 1,
-      },
-      {
-        timestamp: -1,
-      },
-    ] as unknown as IndexDescription[]);
-  }
+    yield* Effect.log('Done.');
+  });
+}
 
-  await client.close();
-  logger.info('Done.');
+function setupDb(client: MongoClient): Effect.Effect<void, DatabaseError> {
+  return Effect.gen(function* () {
+    yield* Effect.log('Creating orfarchiv DB...');
+
+    const db = client.db('orfarchiv');
+    const collections = yield* Effect.tryPromise({
+      try: () => db.collections(),
+      catch: (error) => new DatabaseError({ message: 'Failed to fetch collections.', cause: error }),
+    });
+
+    if (!collections.find((collection) => collection.collectionName === 'news')) {
+      yield* Effect.log('Creating news collection...');
+
+      yield* Effect.tryPromise({
+        try: () => db.createCollection('news'),
+        catch: (error) => new DatabaseError({ message: 'Failed to create news collection.', cause: error }),
+      });
+
+      const news = db.collection('news');
+      yield* Effect.tryPromise({
+        try: () =>
+          news.createIndexes([
+            {
+              key: { id: 1 },
+              name: 'id_asc',
+            },
+            {
+              key: { id: -1 },
+              name: 'id_desc',
+            },
+            {
+              key: { timestamp: 1 },
+              name: 'timestamp_asc',
+            },
+            {
+              key: { timestamp: -1 },
+              name: 'timestamp_desc',
+            },
+          ] as IndexDescription[]),
+        catch: (error) => new DatabaseError({ message: 'Failed to create news collection indexes.', cause: error }),
+      });
+    }
+  });
 }
