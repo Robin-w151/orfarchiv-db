@@ -6,9 +6,9 @@ import { mkdir, writeFile } from 'fs/promises';
 import meow from 'meow';
 import { Collection, MongoClient, type WithId } from 'mongodb';
 import { join } from 'path';
-import { backupDir, dbConnectionUrl } from './env.ts';
-import { DatabaseError, IOError } from './error.ts';
-import { loggerLayer } from './logger.ts';
+import { backupDir, dbConnectionUrl } from './shared/env.ts';
+import { DatabaseError, IOError } from './shared/error.ts';
+import { loggerLayer } from './shared/logger.ts';
 
 dotenv.config({ silent: true });
 

@@ -1,9 +1,9 @@
 import { NodeRuntime } from '@effect/platform-node';
 import { Effect, pipe } from 'effect';
 import { MongoClient, type IndexDescription } from 'mongodb';
-import { dbConnectionUrl } from './env.ts';
-import { DatabaseError } from './error.ts';
-import { loggerLayer } from './logger.ts';
+import { dbConnectionUrl } from './shared/env.ts';
+import { DatabaseError } from './shared/error.ts';
+import { loggerLayer } from './shared/logger.ts';
 
 pipe(
   Effect.matchEffect(main(), {

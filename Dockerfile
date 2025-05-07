@@ -6,7 +6,8 @@ COPY package.json package-lock.json ./
 
 RUN npm ci --omit=dev --ignore-scripts
 
-COPY ./src/backup.ts ./src/logger.ts ./
+COPY ./src/backup.ts ./
+COPY ./src/shared/ ./shared/
 
 ENTRYPOINT ["node", "--experimental-strip-types", "backup.ts"]
 
