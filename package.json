@@ -10,11 +10,11 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "^0.84.2",
+    "@effect/platform-node": "^0.85.11",
     "dotenv-flow": "^4.1.0",
     "effect": "^3.14.19",
     "meow": "^13.2.0",
-    "mongodb": "^6.16.0",
+    "mongodb": "^6.17.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
@@ -33,7 +33,7 @@
     "semantic-release": "^24.2.5",
     "semantic-release-gha-output": "^1.1.2",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.33.1"
+    "typescript-eslint": "^8.34.0"
   },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0"
