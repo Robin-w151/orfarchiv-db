@@ -12,17 +12,17 @@
   "dependencies": {
     "@effect/platform-node": "^0.96.1",
     "dotenv-flow": "^4.1.0",
-    "effect": "^3.17.9",
+    "effect": "^3.17.14",
     "meow": "^13.2.0",
-    "mongodb": "^6.19.0",
+    "mongodb": "^6.20.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
-    "@eslint/js": "^9.35.0",
+    "@eslint/js": "^9.36.0",
     "@semantic-release/git": "^10.0.1",
-    "eslint": "^9.35.0",
+    "eslint": "^9.36.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.5.4",
@@ -30,10 +30,10 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.1.6",
     "prettier": "^3.6.2",
-    "semantic-release": "^24.2.8",
+    "semantic-release": "^24.2.9",
     "semantic-release-gha-output": "^1.1.2",
     "typescript": "^5.9.2",
-    "typescript-eslint": "^8.43.0"
+    "typescript-eslint": "^8.44.0"
   },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0"
