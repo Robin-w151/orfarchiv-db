@@ -10,7 +10,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "^0.98.3",
+    "@effect/platform-node": "^0.98.4",
     "dotenv-flow": "^4.1.0",
     "effect": "^3.18.4",
     "meow": "^13.2.0",
@@ -20,9 +20,9 @@
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
-    "@eslint/js": "^9.37.0",
+    "@eslint/js": "^9.38.0",
     "@semantic-release/git": "^10.0.1",
-    "eslint": "^9.37.0",
+    "eslint": "^9.38.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-config-recommended": "^4.1.0",
     "eslint-plugin-prettier": "^5.5.4",
@@ -33,7 +33,7 @@
     "semantic-release": "^24.2.9",
     "semantic-release-gha-output": "^1.1.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.0"
+    "typescript-eslint": "^8.46.1"
   },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0"
