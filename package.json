@@ -10,16 +10,16 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "^0.98.4",
+    "@effect/platform-node": "^0.99.0",
     "dotenv-flow": "^4.1.0",
-    "effect": "^3.18.4",
-    "meow": "^13.2.0",
+    "effect": "^3.19.0",
+    "meow": "^14.0.0",
     "mongodb": "^6.20.0",
     "winston": "^3.18.3"
   },
   "devDependencies": {
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1",
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
     "@eslint/js": "^9.39.0",
     "@semantic-release/git": "^10.0.1",
     "eslint": "^9.39.0",
@@ -30,7 +30,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "prettier": "^3.6.2",
-    "semantic-release": "^24.2.9",
+    "semantic-release": "^25.0.1",
     "semantic-release-gha-output": "^1.1.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.2"
