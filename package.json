@@ -10,7 +10,7 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "^0.103.0",
+    "@effect/platform-node": "^0.104.0",
     "dotenv-flow": "^4.1.0",
     "effect": "^3.19.12",
     "meow": "^14.0.0",
@@ -33,7 +33,7 @@
     "semantic-release": "^25.0.2",
     "semantic-release-gha-output": "^1.1.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.49.0"
+    "typescript-eslint": "^8.50.0"
   },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0",
