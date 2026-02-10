@@ -12,14 +12,14 @@
   "dependencies": {
     "@effect/platform-node": "0.104.1",
     "dotenv-flow": "4.1.0",
-    "effect": "3.19.15",
+    "effect": "3.19.16",
     "meow": "14.0.0",
-    "mongodb": "7.0.0",
+    "mongodb": "7.1.0",
     "winston": "3.19.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "20.4.0",
-    "@commitlint/config-conventional": "20.4.0",
+    "@commitlint/cli": "20.4.1",
+    "@commitlint/config-conventional": "20.4.1",
     "@eslint/js": "9.39.2",
     "@semantic-release/git": "10.0.1",
     "eslint": "9.39.2",
