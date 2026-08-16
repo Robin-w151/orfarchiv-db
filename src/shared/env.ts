@@ -23,7 +23,7 @@ function loadEnvVariable(name: string, fallback: string): Effect.Effect<string> 
         Effect.tapError((error) => Effect.logWarning(`${error}`)),
       ),
     ),
-    Effect.catchAll(() => Config.string(name)),
-    Effect.catchAll(() => Effect.succeed(fallback)),
+    Effect.catch(() => Config.string(name)),
+    Effect.catch(() => Effect.succeed(fallback)),
   );
 }

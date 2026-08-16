@@ -10,9 +10,9 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "0.108.1",
+    "@effect/platform-node": "4.0.0-rc.109",
     "dotenv-flow": "4.1.0",
-    "effect": "3.22.1",
+    "effect": "4.0.0-rc.109",
     "meow": "14.1.0",
     "mongodb": "7.5.0",
     "winston": "3.19.0"
