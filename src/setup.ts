@@ -12,7 +12,7 @@ pipe(
       Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`),
   }),
   Effect.provide(loggerLayer),
-  NodeRuntime.runMain({ disablePrettyLogger: true }),
+  NodeRuntime.runMain,
 );
 
 function main(): Effect.Effect<void, Error> {
@@ -47,7 +47,7 @@ function setupDb(client: MongoClient): Effect.Effect<void, DatabaseError> {
       catch: (error) => new DatabaseError({ message: 'Failed to fetch collections.', cause: error }),
     });
 
-    if (!collections.find((collection) => collection.collectionName === 'news')) {
+    if (!collections.some((collection) => collection.collectionName === 'news')) {
       yield* Effect.log('Creating news collection...');
 
       yield* Effect.tryPromise({

@@ -1,11 +1,11 @@
 import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
 import { Cron, Duration, Effect, pipe, Schedule } from 'effect';
-import type { TimeoutException } from 'effect/Cause';
-import { mkdir, writeFile } from 'fs/promises';
+import type { TimeoutError } from 'effect/Cause';
+import { mkdir, writeFile } from 'node:fs/promises';
 import meow from 'meow';
 import { Collection, MongoClient, type WithId } from 'mongodb';
-import { join } from 'path';
+import { join } from 'node:path';
 import { backupDir, dbConnectionUrl } from './shared/env.ts';
 import { DatabaseError, IOError } from './shared/error.ts';
 import { loggerLayer } from './shared/logger.ts';
@@ -19,7 +19,7 @@ pipe(
       Effect.logError(`${error?.message ?? 'Unknown error'}\nCause: ${error.cause}\nStack: ${error?.stack ?? ''}`),
   }),
   Effect.provide(loggerLayer),
-  NodeRuntime.runMain({ disablePrettyLogger: true }),
+  NodeRuntime.runMain,
 );
 
 function main(): Effect.Effect<void, Error> {
@@ -28,9 +28,9 @@ function main(): Effect.Effect<void, Error> {
     const { keepRunning, cron } = cli.flags;
 
     if (keepRunning) {
-      const schedule = Schedule.cron(Cron.unsafeParse(cron));
+      const schedule = Schedule.cron(Cron.parseUnsafe(cron));
       yield* Effect.schedule(
-        run().pipe(Effect.catchTag('TimeoutException', () => Effect.logWarning('Scheduled task ran into a timeout'))),
+        run().pipe(Effect.catchTag('TimeoutError', () => Effect.logWarning('Scheduled task ran into a timeout'))),
         schedule,
       );
     } else {
@@ -71,7 +71,7 @@ function parseArgs() {
   );
 }
 
-function run(): Effect.Effect<void, DatabaseError | IOError | TimeoutException> {
+function run(): Effect.Effect<void, DatabaseError | IOError | TimeoutError> {
   return exportNews().pipe(Effect.timeout(Duration.minutes(5)));
 }
 

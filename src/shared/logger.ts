@@ -1,4 +1,5 @@
-import { LogLevel, Logger } from 'effect';
+import { Logger } from 'effect';
+import type { LogLevel } from 'effect';
 import { createLogger, format, transports } from 'winston';
 const { align, colorize, combine, printf, timestamp } = format;
 
@@ -17,17 +18,17 @@ const effectLogger = Logger.make(({ logLevel, message }) => {
   logger.log(mapLogLevel(logLevel), Array.isArray(message) ? message.join(' ') : message);
 });
 
-export const loggerLayer = Logger.replace(Logger.defaultLogger, effectLogger);
+export const loggerLayer = Logger.layer([effectLogger, Logger.tracerLogger]);
 
 function mapLogLevel(logLevel: LogLevel.LogLevel): string {
   switch (logLevel) {
-    case LogLevel.Fatal:
+    case 'Fatal':
       return 'error';
-    case LogLevel.Warning:
+    case 'Warn':
       return 'warn';
-    case LogLevel.Trace:
+    case 'Trace':
       return 'debug';
     default:
-      return logLevel.label.toLowerCase();
+      return logLevel.toLowerCase();
   }
 }
