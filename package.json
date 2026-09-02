@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "backup": "node --experimental-strip-types src/backup.ts",
+    "restore": "node --experimental-strip-types src/restore.ts",
     "setup": "node --experimental-strip-types src/setup.ts",
     "lint": "prettier --check . && eslint .",
     "prepare": "husky"

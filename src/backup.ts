@@ -2,13 +2,14 @@ import { NodeRuntime } from '@effect/platform-node';
 import dotenv from 'dotenv-flow';
 import { Cron, Duration, Effect, pipe, Schedule } from 'effect';
 import type { TimeoutError } from 'effect/Cause';
-import { mkdir, writeFile } from 'node:fs/promises';
 import meow from 'meow';
 import { Collection, MongoClient, type WithId } from 'mongodb';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { backupDir, dbConnectionUrl } from './shared/env.ts';
 import { DatabaseError, IOError } from './shared/error.ts';
 import { loggerLayer } from './shared/logger.ts';
+import { TITLE_EMBEDDING_FIELD } from './shared/search.ts';
 
 dotenv.config({ silent: true });
 
@@ -80,7 +81,11 @@ function exportNews(): Effect.Effect<void, DatabaseError | IOError> {
     yield* Effect.log('Fetching data...');
     const news = yield* withOrfArchivDb((newsCollection) =>
       Effect.tryPromise({
-        try: () => newsCollection.find().sort({ timestamp: -1 }).toArray(),
+        try: () =>
+          newsCollection
+            .find({}, { projection: { [TITLE_EMBEDDING_FIELD]: 0 } })
+            .sort({ timestamp: -1 })
+            .toArray(),
         catch: (error) => new DatabaseError({ message: 'Failed to fetch data.', cause: error }),
       }),
     );
