@@ -1,6 +1,6 @@
 import { Config, Effect, pipe } from 'effect';
 import { readFile } from 'fs/promises';
-import { IOError } from './error.ts';
+import { IOError } from './error';
 
 export function dbConnectionUrl(): Effect.Effect<string> {
   return loadEnvVariable('ORFARCHIV_DB_URL', 'mongodb://localhost');

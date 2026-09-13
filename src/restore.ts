@@ -5,9 +5,9 @@ import meow from 'meow';
 import { Collection, MongoClient, type AnyBulkWriteOperation, type Document } from 'mongodb';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
-import { backupDir, dbConnectionUrl } from './shared/env.ts';
-import { DatabaseError, IOError } from './shared/error.ts';
-import { loggerLayer } from './shared/logger.ts';
+import { backupDir, dbConnectionUrl } from './shared/env';
+import { DatabaseError, IOError } from './shared/error';
+import { loggerLayer } from './shared/logger';
 
 dotenv.config({ silent: true });
 

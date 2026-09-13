@@ -1,10 +1,10 @@
 import { NodeRuntime } from '@effect/platform-node';
 import { Effect, pipe } from 'effect';
 import { MongoClient, type Collection, type IndexDescription, type SearchIndexDescription } from 'mongodb';
-import { dbConnectionUrl } from './shared/env.ts';
-import { DatabaseError } from './shared/error.ts';
-import { loggerLayer } from './shared/logger.ts';
-import { NEWS_TITLE_VECTOR_INDEX, TITLE_EMBEDDING_DIMENSIONS } from './shared/search.ts';
+import { dbConnectionUrl } from './shared/env';
+import { DatabaseError } from './shared/error';
+import { loggerLayer } from './shared/logger';
+import { NEWS_TITLE_VECTOR_INDEX, TITLE_EMBEDDING_DIMENSIONS } from './shared/search';
 
 type NamedSearchIndexDescription = SearchIndexDescription & { name: string };
 

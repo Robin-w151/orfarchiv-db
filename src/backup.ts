@@ -6,10 +6,10 @@ import meow from 'meow';
 import { Collection, MongoClient, type WithId } from 'mongodb';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { backupDir, dbConnectionUrl } from './shared/env.ts';
-import { DatabaseError, IOError } from './shared/error.ts';
-import { loggerLayer } from './shared/logger.ts';
-import { TITLE_EMBEDDING_FIELD } from './shared/search.ts';
+import { backupDir, dbConnectionUrl } from './shared/env';
+import { DatabaseError, IOError } from './shared/error';
+import { loggerLayer } from './shared/logger';
+import { TITLE_EMBEDDING_FIELD } from './shared/search';
 
 dotenv.config({ silent: true });
 
