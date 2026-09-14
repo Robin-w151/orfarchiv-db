@@ -8,7 +8,7 @@ import {
   type SearchIndexDescription,
 } from 'mongodb';
 import { DatabaseError } from '../shared/error';
-import { TITLE_EMBEDDING_FIELD } from '../shared/search';
+import { TITLE_EMBEDDING_FIELD } from '#common/search';
 import { Environment } from './env';
 
 const DB_NAME = 'orfarchiv';

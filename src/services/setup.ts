@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from 'effect';
 import type { IndexDescription, SearchIndexDescription } from 'mongodb';
-import { NEWS_TITLE_VECTOR_INDEX, TITLE_EMBEDDING_DIMENSIONS } from '../shared/search';
+import { NEWS_TITLE_VECTOR_INDEX, TITLE_EMBEDDING_DIMENSIONS } from '#common/search';
 import { Database, type DatabaseConnection } from './database';
 
 type NamedSearchIndexDescription = SearchIndexDescription & { name: string };

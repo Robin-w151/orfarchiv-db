@@ -14,5 +14,5 @@
     "noEmit": true
   },
   "include": ["src/**/*.ts", "vite.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "src/shared/common/**/*.spec.ts", "src/shared/common/vitest.config.ts"]
 }
