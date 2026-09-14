@@ -6,9 +6,7 @@ export default defineConfig({
     ssr: true,
     lib: {
       entry: {
-        backup: './src/backup.ts',
-        restore: './src/restore.ts',
-        setup: './src/setup.ts',
+        db: './src/index.ts',
       },
       formats: ['es'],
       name: 'db',
