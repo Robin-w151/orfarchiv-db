@@ -1,62 +1,12 @@
-import { NEWS_TITLE_VECTOR_INDEX, TITLE_EMBEDDING_DIMENSIONS } from '#common/search';
 import type { Target } from '#common/targets';
-import { Context, Effect, Equal, Layer, Result } from 'effect';
-import type { Document, IndexDescription, SearchIndexDescription } from 'mongodb';
+import { Context, Effect, Layer, Result } from 'effect';
 import { formatError, SetupError } from '../shared/error';
+import { indexes, searchIndexDefinitionMatches, searchIndexes } from '../shared/model';
 import { Database, type DatabaseConnection } from './database';
-
-type NamedSearchIndexDescription = SearchIndexDescription & { name: string };
 
 export interface SetupOptions {
   readonly recreateSearchIndexes: boolean;
 }
-
-const indexes: IndexDescription[] = [
-  {
-    key: { id: 1 },
-    name: 'id_asc',
-  },
-  {
-    key: { id: -1 },
-    name: 'id_desc',
-  },
-  {
-    key: { timestamp: 1 },
-    name: 'timestamp_asc',
-  },
-  {
-    key: { timestamp: -1 },
-    name: 'timestamp_desc',
-  },
-  {
-    key: { timestamp: -1, id: -1 },
-    name: 'timestamp_id_desc',
-  },
-  {
-    key: { category: 1 },
-    name: 'category_asc',
-  },
-];
-
-const searchIndexes: NamedSearchIndexDescription[] = [
-  {
-    name: NEWS_TITLE_VECTOR_INDEX,
-    type: 'vectorSearch',
-    definition: {
-      fields: [
-        {
-          type: 'vector',
-          path: 'titleEmbedding',
-          numDimensions: TITLE_EMBEDDING_DIMENSIONS,
-          similarity: 'cosine',
-        },
-        { type: 'filter', path: 'timestamp' },
-        { type: 'filter', path: 'source' },
-        { type: 'filter', path: 'category' },
-      ],
-    },
-  },
-];
 
 export class Setup extends Context.Service<Setup>()('Setup', {
   make: Effect.gen(function* () {
@@ -128,7 +78,7 @@ function defineService({ database }: { database: typeof Database.Service }) {
           continue;
         }
 
-        if (searchIndexDefinitionMatches(searchIndex.definition, existing.get(searchIndex.name))) {
+        if (searchIndexDefinitionMatches(searchIndex.definition, existing.get(searchIndex.name)?.definition)) {
           yield* Effect.log(`Search index '${searchIndex.name}' is up to date.`);
           continue;
         }
@@ -155,19 +105,4 @@ function defineService({ database }: { database: typeof Database.Service }) {
   return {
     setup,
   };
-}
-
-function searchIndexDefinitionMatches(desired: Document, latest: Document | undefined): boolean {
-  const desiredFields = (desired.fields ?? []) as Array<Document>;
-  const latestFields = (latest?.fields ?? []) as Array<Document>;
-  if (desiredFields.length !== latestFields.length) {
-    return false;
-  }
-
-  return desiredFields.every((desiredField) => {
-    const latestField = latestFields.find(
-      (field) => field.type === desiredField.type && field.path === desiredField.path,
-    );
-    return !!latestField && Object.entries(desiredField).every(([key, value]) => Equal.equals(value, latestField[key]));
-  });
 }

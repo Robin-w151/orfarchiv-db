@@ -6,6 +6,7 @@ import {
   type AnyBulkWriteOperation,
   type Db,
   type Document,
+  type Filter,
   type IndexDescription,
   type SearchIndexDescription,
 } from 'mongodb';
@@ -14,7 +15,21 @@ import { DatabaseError } from '../shared/error';
 const DB_NAME = 'orfarchiv';
 const NEWS_COLLECTION = 'news';
 const CURSOR_BATCH_SIZE = 1000;
-const STORY_FIELDS = ['id', 'title', 'category', 'url', 'timestamp', 'source'] as const;
+const STORY_FIELDS: ReadonlyArray<string> = ['id', 'title', 'category', 'url', 'timestamp', 'source'];
+export const SYNC_FIELDS: ReadonlyArray<string> = [...STORY_FIELDS, TITLE_EMBEDDING_FIELD];
+
+export interface UpsertResult {
+  readonly upserted: number;
+  readonly modified: number;
+  readonly matched: number;
+  readonly skipped: number;
+}
+
+export interface SearchIndexState {
+  readonly definition: Document | undefined;
+  readonly status: string | undefined;
+  readonly queryable: boolean;
+}
 
 export type DatabaseConnection = ReturnType<typeof defineConnection>;
 
@@ -52,17 +67,64 @@ function defineConnection(db: Db) {
     );
   }
 
-  function upsertNews(stories: Array<Document>) {
+  function streamNews({ since }: { since?: Date }) {
+    return Stream.fromAsyncIterable(
+      news.find(sinceFilter(since), { batchSize: CURSOR_BATCH_SIZE }),
+      (error) => new DatabaseError({ message: 'Failed to fetch data.', cause: error }),
+    );
+  }
+
+  function countNews({ since }: { since?: Date }) {
+    return Effect.tryPromise({
+      try: () => news.countDocuments(sinceFilter(since)),
+      catch: (error) => new DatabaseError({ message: 'Failed to count stories.', cause: error }),
+    });
+  }
+
+  function estimatedNewsCount() {
+    return Effect.tryPromise({
+      try: () => news.estimatedDocumentCount(),
+      catch: (error) => new DatabaseError({ message: 'Failed to count stories.', cause: error }),
+    });
+  }
+
+  function countNewsWithoutEmbedding() {
+    return Effect.tryPromise({
+      try: () => news.countDocuments({ [TITLE_EMBEDDING_FIELD]: { $exists: false } }),
+      catch: (error) => new DatabaseError({ message: 'Failed to count stories without embedding.', cause: error }),
+    });
+  }
+
+  function latestNewsTimestamp() {
     return Effect.gen(function* () {
-      const operations = stories.map(toUpsert).filter((operation) => !!operation);
+      const latest = yield* Effect.tryPromise({
+        try: () => news.findOne({}, { projection: { _id: 0, timestamp: 1 }, sort: { timestamp: -1 } }),
+        catch: (error) => new DatabaseError({ message: 'Failed to fetch latest story.', cause: error }),
+      });
+
+      return latest?.timestamp instanceof Date ? latest.timestamp : undefined;
+    });
+  }
+
+  function upsertNews(stories: ReadonlyArray<Document>, fields: ReadonlyArray<string> = STORY_FIELDS) {
+    return Effect.gen(function* () {
+      const operations = stories.map((story) => toUpsert(story, fields)).filter((operation) => !!operation);
+      const skipped = stories.length - operations.length;
       if (operations.length === 0) {
-        return;
+        return { upserted: 0, modified: 0, matched: 0, skipped } satisfies UpsertResult;
       }
 
-      yield* Effect.tryPromise({
+      const result = yield* Effect.tryPromise({
         try: () => news.bulkWrite(operations, { ordered: false }),
         catch: (error) => new DatabaseError({ message: 'Failed to write stories.', cause: error }),
       });
+
+      return {
+        upserted: result.upsertedCount,
+        modified: result.modifiedCount,
+        matched: result.matchedCount,
+        skipped,
+      } satisfies UpsertResult;
     });
   }
 
@@ -91,6 +153,13 @@ function defineConnection(db: Db) {
     });
   }
 
+  function listNewsIndexes() {
+    return Effect.tryPromise({
+      try: () => news.listIndexes().toArray(),
+      catch: (error) => new DatabaseError({ message: 'Failed to list indexes.', cause: error }),
+    });
+  }
+
   function listNewsSearchIndexes() {
     return Effect.gen(function* () {
       const indexes = yield* Effect.tryPromise({
@@ -98,7 +167,16 @@ function defineConnection(db: Db) {
         catch: (error) => new DatabaseError({ message: 'Failed to list search indexes.', cause: error }),
       });
 
-      return new Map(indexes.map((index) => [index.name as string, index.latestDefinition as Document | undefined]));
+      return new Map<string, SearchIndexState>(
+        indexes.map((index) => [
+          index.name as string,
+          {
+            definition: index.latestDefinition as Document | undefined,
+            status: index.status as string | undefined,
+            queryable: index.queryable === true,
+          },
+        ]),
+      );
     });
   }
 
@@ -119,23 +197,33 @@ function defineConnection(db: Db) {
 
   return {
     streamAllNews,
+    streamNews,
+    countNews,
+    estimatedNewsCount,
+    countNewsWithoutEmbedding,
+    latestNewsTimestamp,
     upsertNews,
     newsCollectionExists,
     createNewsCollection,
     createNewsIndexes,
+    listNewsIndexes,
     listNewsSearchIndexes,
     createNewsSearchIndex,
     dropNewsSearchIndex,
   };
 }
 
-function toUpsert(story: Document): AnyBulkWriteOperation | undefined {
+function sinceFilter(since: Date | undefined): Filter<Document> {
+  return since ? { timestamp: { $gte: since } } : {};
+}
+
+function toUpsert(story: Document, fields: ReadonlyArray<string>): AnyBulkWriteOperation | undefined {
   if (typeof story.id !== 'string') {
     return undefined;
   }
 
   const update: Document = {};
-  for (const field of STORY_FIELDS) {
+  for (const field of fields) {
     if (story[field] !== undefined) {
       update[field] = field === 'timestamp' ? new Date(story[field] as string) : story[field];
     }
