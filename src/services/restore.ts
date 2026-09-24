@@ -1,3 +1,4 @@
+import type { Target } from '#common/targets';
 import { NodeFileSystem } from '@effect/platform-node';
 import { Context, Effect, FileSystem, Layer } from 'effect';
 import type { Document } from 'mongodb';
@@ -10,6 +11,7 @@ export interface RestoreOptions {
   readonly file?: string;
   readonly batchSize: number;
   readonly dryRun: boolean;
+  readonly targets: ReadonlyArray<Target>;
 }
 
 export class Restore extends Context.Service<Restore>()('Restore', {
@@ -37,28 +39,38 @@ function defineService({
   database: typeof Database.Service;
   fs: FileSystem.FileSystem;
 }) {
-  function restore({ file, batchSize, dryRun }: RestoreOptions) {
+  function restore({ file, batchSize, dryRun, targets }: RestoreOptions) {
     return Effect.gen(function* () {
-      const backupFile = file ?? (yield* latestBackupFile());
-      yield* Effect.log(`Reading backup file ${backupFile}...`);
+      for (const target of targets) {
+        yield* restoreTarget(target, file, batchSize, dryRun);
+      }
+
+      yield* Effect.log('Done.');
+    });
+  }
+
+  function restoreTarget(target: Target, file: string | undefined, batchSize: number, dryRun: boolean) {
+    return Effect.gen(function* () {
+      const backupFile = file ?? (yield* latestBackupFile(target));
+      yield* Effect.log(`[${target.label}] Reading backup file ${backupFile}...`);
 
       const stories = yield* readStories(backupFile);
-      yield* Effect.log(`Found ${stories.length} stories.`);
+      yield* Effect.log(`[${target.label}] Found ${stories.length} stories.`);
 
       if (dryRun) {
-        yield* Effect.log('Dry run, nothing written.');
+        yield* Effect.log(`[${target.label}] Dry run, nothing written.`);
         return;
       }
 
-      const connection = yield* database.connect();
-      yield* writeStories(connection, stories, batchSize);
-      yield* Effect.log('Done.');
+      yield* Effect.log(`[${target.label}] Connecting to DB...`);
+      const connection = yield* database.connect(target);
+      yield* writeStories(target, connection, stories, batchSize);
     }).pipe(Effect.scoped);
   }
 
-  function latestBackupFile() {
+  function latestBackupFile(target: Target) {
     return Effect.gen(function* () {
-      const dir = yield* environment.backupDir;
+      const dir = join(yield* environment.backupDir, target.label);
       const files = yield* fs
         .readDirectory(dir)
         .pipe(
@@ -98,13 +110,15 @@ function defineService({
     });
   }
 
-  function writeStories(connection: DatabaseConnection, stories: Array<Document>, batchSize: number) {
+  function writeStories(target: Target, connection: DatabaseConnection, stories: Array<Document>, batchSize: number) {
     return Effect.gen(function* () {
       const size = Math.max(1, batchSize);
 
       for (let index = 0; index < stories.length; index += size) {
         yield* connection.upsertNews(stories.slice(index, index + size));
-        yield* Effect.log(`Imported ${Math.min(index + size, stories.length)}/${stories.length} stories.`);
+        yield* Effect.log(
+          `[${target.label}] Imported ${Math.min(index + size, stories.length)}/${stories.length} stories.`,
+        );
       }
     });
   }

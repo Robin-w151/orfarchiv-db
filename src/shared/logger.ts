@@ -1,6 +1,7 @@
 import { Logger } from 'effect';
 import type { LogLevel } from 'effect';
 import { createLogger, format, transports } from 'winston';
+import { redact } from '#common/targets';
 const { align, colorize, combine, printf, timestamp } = format;
 
 const logger = createLogger({
@@ -15,7 +16,7 @@ const logger = createLogger({
 });
 
 const effectLogger = Logger.make(({ logLevel, message }) => {
-  logger.log(mapLogLevel(logLevel), Array.isArray(message) ? message.join(' ') : message);
+  logger.log(mapLogLevel(logLevel), redact(Array.isArray(message) ? message.join(' ') : String(message)));
 });
 
 export const loggerLayer = Logger.layer([effectLogger, Logger.tracerLogger]);

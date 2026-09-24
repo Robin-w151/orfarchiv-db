@@ -1,4 +1,6 @@
-import { Context, Effect, Layer } from 'effect';
+import { TITLE_EMBEDDING_FIELD } from '#common/search';
+import type { Target } from '#common/targets';
+import { Context, Effect, Layer, Stream } from 'effect';
 import {
   MongoClient,
   type AnyBulkWriteOperation,
@@ -8,34 +10,26 @@ import {
   type SearchIndexDescription,
 } from 'mongodb';
 import { DatabaseError } from '../shared/error';
-import { TITLE_EMBEDDING_FIELD } from '#common/search';
-import { Environment } from './env';
 
 const DB_NAME = 'orfarchiv';
 const NEWS_COLLECTION = 'news';
+const CURSOR_BATCH_SIZE = 1000;
 const STORY_FIELDS = ['id', 'title', 'category', 'url', 'timestamp', 'source'] as const;
 
 export type DatabaseConnection = ReturnType<typeof defineConnection>;
 
 export class Database extends Context.Service<Database>()('Database', {
-  make: Effect.gen(function* () {
-    const environment = yield* Environment;
-    return defineService({ environment });
-  }),
+  make: Effect.succeed(defineService()),
 }) {
-  static readonly layerWithoutDependencies = Layer.effect(this, this.make);
-  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(Environment.layer));
+  static readonly layer = Layer.effect(this, this.make);
 }
 
-function defineService({ environment }: { environment: typeof Environment.Service }) {
-  function connect() {
+function defineService() {
+  function connect(target: Target) {
     return Effect.acquireRelease(
-      Effect.gen(function* () {
-        const url = yield* environment.dbConnectionUrl;
-        return yield* Effect.tryPromise({
-          try: () => MongoClient.connect(url),
-          catch: (error) => new DatabaseError({ message: 'Failed to connect to DB.', cause: error }),
-        });
+      Effect.tryPromise({
+        try: () => MongoClient.connect(target.url),
+        catch: (error) => new DatabaseError({ message: `Failed to connect to DB '${target.label}'.`, cause: error }),
       }),
       (client) => Effect.promise(() => client.close()),
     ).pipe(Effect.map((client) => defineConnection(client.db(DB_NAME))));
@@ -49,15 +43,13 @@ function defineService({ environment }: { environment: typeof Environment.Servic
 function defineConnection(db: Db) {
   const news = db.collection(NEWS_COLLECTION);
 
-  function findAllNews() {
-    return Effect.tryPromise({
-      try: () =>
-        news
-          .find({}, { projection: { [TITLE_EMBEDDING_FIELD]: 0 } })
-          .sort({ timestamp: -1 })
-          .toArray(),
-      catch: (error) => new DatabaseError({ message: 'Failed to fetch data.', cause: error }),
-    });
+  function streamAllNews() {
+    return Stream.fromAsyncIterable(
+      news
+        .find({}, { projection: { [TITLE_EMBEDDING_FIELD]: 0 }, batchSize: CURSOR_BATCH_SIZE })
+        .sort({ timestamp: -1 }),
+      (error) => new DatabaseError({ message: 'Failed to fetch data.', cause: error }),
+    );
   }
 
   function upsertNews(stories: Array<Document>) {
@@ -99,14 +91,14 @@ function defineConnection(db: Db) {
     });
   }
 
-  function listNewsSearchIndexNames() {
+  function listNewsSearchIndexes() {
     return Effect.gen(function* () {
       const indexes = yield* Effect.tryPromise({
-        try: () => news.listSearchIndexes().toArray(),
+        try: () => news.listSearchIndexes().toArray() as Promise<Array<Document>>,
         catch: (error) => new DatabaseError({ message: 'Failed to list search indexes.', cause: error }),
       });
 
-      return new Set(indexes.map((index) => index.name as string));
+      return new Map(indexes.map((index) => [index.name as string, index.latestDefinition as Document | undefined]));
     });
   }
 
@@ -118,14 +110,22 @@ function defineConnection(db: Db) {
     });
   }
 
+  function dropNewsSearchIndex(name: string) {
+    return Effect.tryPromise({
+      try: () => news.dropSearchIndex(name),
+      catch: (error) => new DatabaseError({ message: `Failed to drop search index '${name}'.`, cause: error }),
+    });
+  }
+
   return {
-    findAllNews,
+    streamAllNews,
     upsertNews,
     newsCollectionExists,
     createNewsCollection,
     createNewsIndexes,
-    listNewsSearchIndexNames,
+    listNewsSearchIndexes,
     createNewsSearchIndex,
+    dropNewsSearchIndex,
   };
 }
 

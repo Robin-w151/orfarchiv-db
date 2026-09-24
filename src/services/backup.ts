@@ -1,11 +1,13 @@
+import type { Target } from '#common/targets';
 import { NodeFileSystem } from '@effect/platform-node';
-import { Context, Cron, Duration, Effect, FileSystem, Layer, Schedule } from 'effect';
+import { Context, Cron, Duration, Effect, FileSystem, Layer, Result, Schedule, Sink, Stream } from 'effect';
 import { join } from 'node:path';
-import { IOError } from '../shared/error';
+import { BackupError, formatError, IOError } from '../shared/error';
 import { Database } from './database';
 import { Environment } from './env';
 
 const BACKUP_TIMEOUT = Duration.minutes(5);
+const WRITE_BATCH_SIZE = 1000;
 
 export class Backup extends Context.Service<Backup>()('Backup', {
   make: Effect.gen(function* () {
@@ -32,48 +34,84 @@ function defineService({
   database: typeof Database.Service;
   fs: FileSystem.FileSystem;
 }) {
-  function createBackup() {
-    return exportNews().pipe(Effect.timeout(BACKUP_TIMEOUT));
+  function createBackup(targets: ReadonlyArray<Target>) {
+    return Effect.gen(function* () {
+      const results = yield* Effect.forEach(
+        targets,
+        (target) =>
+          Effect.gen(function* () {
+            const result = yield* backupTarget(target).pipe(
+              Effect.timeoutOrElse({
+                duration: BACKUP_TIMEOUT,
+                orElse: () =>
+                  Effect.fail(new BackupError({ message: `Timed out after ${Duration.format(BACKUP_TIMEOUT)}.` })),
+              }),
+              Effect.result,
+            );
+
+            if (Result.isFailure(result)) {
+              yield* Effect.logError(`Backup of '${target.label}' failed: ${formatError(result.failure)}`);
+            }
+
+            return result;
+          }),
+        { concurrency: 'unbounded' },
+      );
+
+      if (results.every(Result.isFailure)) {
+        return yield* new BackupError({ message: `All ${targets.length} backup targets failed.` });
+      }
+    });
   }
 
-  function scheduleBackups(cron: Cron.Cron) {
+  function scheduleBackups(cron: Cron.Cron, targets: ReadonlyArray<Target>) {
     return Effect.gen(function* () {
       const schedule = Schedule.cron(cron);
       yield* Effect.schedule(
-        createBackup().pipe(
-          Effect.catchTag('TimeoutError', () => Effect.logWarning('Scheduled task ran into a timeout')),
-        ),
+        createBackup(targets).pipe(Effect.catchTag('BackupError', (error) => Effect.logWarning(error.message))),
         schedule,
       );
     });
   }
 
-  function exportNews() {
+  function backupTarget(target: Target) {
     return Effect.gen(function* () {
-      const news = yield* fetchNews();
+      const backupPath = join(yield* environment.backupDir, target.label);
+      const backupFilePath = join(backupPath, `${getTimestamp()}.json`);
+      const partialFilePath = `${backupFilePath}.partial`;
 
-      yield* Effect.log('Persisting data to backup file...');
-      const timestamp = getTimestamp();
-      const backupPath = yield* environment.backupDir;
-      const backupFilePath = join(backupPath, `${timestamp}.json`);
+      yield* Effect.log(`[${target.label}] Connecting to DB...`);
+      const connection = yield* database.connect(target);
 
       yield* fs
         .makeDirectory(backupPath, { recursive: true })
         .pipe(Effect.mapError((error) => new IOError({ message: 'Failed to create backup directory.', cause: error })));
+
+      yield* Effect.log(`[${target.label}] Streaming data to backup file...`);
+      yield* Stream.make('[').pipe(
+        Stream.concat(
+          connection.streamAllNews().pipe(
+            Stream.zipWithIndex,
+            Stream.map(([story, index]) => (index === 0 ? '' : ',') + JSON.stringify(story)),
+          ),
+        ),
+        Stream.concat(Stream.make(']')),
+        Stream.grouped(WRITE_BATCH_SIZE),
+        Stream.map((parts) => parts.join('')),
+        Stream.encodeText,
+        Stream.run(
+          fs
+            .sink(partialFilePath)
+            .pipe(Sink.mapError((error) => new IOError({ message: 'Failed to write backup file.', cause: error }))),
+        ),
+        Effect.onError(() => fs.remove(partialFilePath).pipe(Effect.ignore)),
+      );
+
       yield* fs
-        .writeFileString(backupFilePath, JSON.stringify(news))
-        .pipe(Effect.mapError((error) => new IOError({ message: 'Failed to write backup file.', cause: error })));
+        .rename(partialFilePath, backupFilePath)
+        .pipe(Effect.mapError((error) => new IOError({ message: 'Failed to finalize backup file.', cause: error })));
 
-      yield* Effect.log(`Backup file ${backupFilePath} created.`);
-    });
-  }
-
-  function fetchNews() {
-    return Effect.gen(function* () {
-      yield* Effect.log('Fetching data...');
-      yield* Effect.log('Connecting to DB...');
-      const connection = yield* database.connect();
-      return yield* connection.findAllNews();
+      yield* Effect.log(`[${target.label}] Backup file ${backupFilePath} created.`);
     }).pipe(Effect.scoped);
   }
 

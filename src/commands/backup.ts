@@ -1,6 +1,8 @@
 import { Cron, Effect } from 'effect';
 import { Command, Flag } from 'effect/unstable/cli';
 import { Backup } from '../services/backup';
+import { Targets } from '../services/targets';
+import { dbCommand } from './db';
 
 export const backupCommand = Command.make(
   'backup',
@@ -20,13 +22,17 @@ export const backupCommand = Command.make(
   },
   ({ keepRunning, cron }) =>
     Effect.gen(function* () {
+      const { target } = yield* dbCommand;
+      const targetsService = yield* Targets;
+      const targets = yield* targetsService.select(target);
       const backup = yield* Backup;
-      yield* keepRunning ? backup.scheduleBackups(cron) : backup.createBackup();
+      yield* keepRunning ? backup.scheduleBackups(cron, targets) : backup.createBackup(targets);
     }),
 ).pipe(
-  Command.withDescription('Export all news to a JSON file in ORFARCHIV_BACKUP_DIR'),
+  Command.withDescription('Export all news of each target to a JSON file in ORFARCHIV_BACKUP_DIR/<label>'),
   Command.withExamples([
-    { command: 'db backup', description: 'Create a single backup' },
+    { command: 'db backup', description: 'Create a single backup of every target' },
+    { command: 'db backup --target localhost:27017', description: 'Create a single backup of one target' },
     { command: 'db backup --keep-running --cron "0 0 3 * * *"', description: 'Create a backup every day at 3am' },
   ]),
 );
