@@ -30,6 +30,14 @@ export const indexes: NamedIndexDescription[] = [
     key: { category: 1 },
     name: 'category_asc',
   },
+  {
+    key: { url: 1 },
+    name: 'url_asc',
+  },
+  {
+    key: { source: 1 },
+    name: 'source_asc',
+  },
 ];
 
 export const searchIndexes: NamedSearchIndexDescription[] = [
