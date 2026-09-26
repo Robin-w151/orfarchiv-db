@@ -81,13 +81,6 @@ function defineConnection(db: Db) {
     });
   }
 
-  function estimatedNewsCount() {
-    return Effect.tryPromise({
-      try: () => news.estimatedDocumentCount(),
-      catch: (error) => new DatabaseError({ message: 'Failed to count stories.', cause: error }),
-    });
-  }
-
   function countNewsWithoutEmbedding() {
     return Effect.tryPromise({
       try: () => news.countDocuments({ [TITLE_EMBEDDING_FIELD]: { $exists: false } }),
@@ -199,7 +192,6 @@ function defineConnection(db: Db) {
     streamAllNews,
     streamNews,
     countNews,
-    estimatedNewsCount,
     countNewsWithoutEmbedding,
     latestNewsTimestamp,
     upsertNews,

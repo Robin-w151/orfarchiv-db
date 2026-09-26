@@ -74,7 +74,7 @@ function defineService({ database }: { database: typeof Database.Service }) {
       const connection = yield* database.connect(target);
       const [count, latestTimestamp, missingEmbeddings, existingIndexes, existingSearchIndexes] = yield* Effect.all(
         [
-          connection.estimatedNewsCount(),
+          connection.countNews({}),
           connection.latestNewsTimestamp(),
           connection.countNewsWithoutEmbedding(),
           connection.listNewsIndexes(),
