@@ -216,8 +216,18 @@ function toUpsert(story: Document, fields: ReadonlyArray<string>): AnyBulkWriteO
 
   const update: Document = {};
   for (const field of fields) {
-    if (story[field] !== undefined) {
-      update[field] = field === 'timestamp' ? new Date(story[field] as string) : story[field];
+    if (story[field] === undefined) {
+      continue;
+    }
+
+    if (field === 'timestamp') {
+      const timestamp = new Date(story[field] as string);
+      if (Number.isNaN(timestamp.getTime())) {
+        return undefined;
+      }
+      update[field] = timestamp;
+    } else {
+      update[field] = story[field];
     }
   }
 

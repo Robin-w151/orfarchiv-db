@@ -1,9 +1,9 @@
 import type { Target } from '#common/targets';
 import { NodeFileSystem } from '@effect/platform-node';
-import { Context, Effect, FileSystem, Layer } from 'effect';
+import { Context, Effect, FileSystem, Layer, Result } from 'effect';
 import type { Document } from 'mongodb';
 import { extname, join } from 'node:path';
-import { IOError } from '../shared/error';
+import { formatError, IOError, RestoreError } from '../shared/error';
 import { Database, type DatabaseConnection } from './database';
 import { Environment } from './env';
 
@@ -41,8 +41,20 @@ function defineService({
 }) {
   function restore({ file, batchSize, dryRun, targets }: RestoreOptions) {
     return Effect.gen(function* () {
+      const failedLabels: Array<string> = [];
+
       for (const target of targets) {
-        yield* restoreTarget(target, file, batchSize, dryRun);
+        const result = yield* restoreTarget(target, file, batchSize, dryRun).pipe(Effect.result);
+        if (Result.isFailure(result)) {
+          yield* Effect.logError(`Restore of '${target.label}' failed: ${formatError(result.failure)}`);
+          failedLabels.push(target.label);
+        }
+      }
+
+      if (failedLabels.length > 0) {
+        return yield* new RestoreError({
+          message: `Restore failed for ${failedLabels.length} of ${targets.length} targets: ${failedLabels.join(', ')}`,
+        });
       }
 
       yield* Effect.log('Done.');

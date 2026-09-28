@@ -5,6 +5,7 @@ export class DatabaseError extends Data.TaggedError('DatabaseError')<{ message: 
 export class TargetError extends Data.TaggedError('TargetError')<{ message: string }> {}
 export class SetupError extends Data.TaggedError('SetupError')<{ message: string }> {}
 export class BackupError extends Data.TaggedError('BackupError')<{ message: string }> {}
+export class RestoreError extends Data.TaggedError('RestoreError')<{ message: string }> {}
 export class SyncError extends Data.TaggedError('SyncError')<{ message: string }> {}
 export class VerifyError extends Data.TaggedError('VerifyError')<{ message: string }> {}
 
@@ -16,6 +17,7 @@ const APP_ERROR_TAGS = new Set([
   'TargetError',
   'SetupError',
   'BackupError',
+  'RestoreError',
   'SyncError',
   'VerifyError',
   'IOError',

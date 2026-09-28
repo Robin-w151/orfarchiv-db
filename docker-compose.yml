@@ -5,7 +5,7 @@ services:
       - MONGODB_INITDB_ROOT_USERNAME=orfarchiv
       - MONGODB_INITDB_ROOT_PASSWORD=orfarchiv
     ports:
-      - "27017:27017"
+      - '27017:27017'
     networks:
       - orfarchiv-db-network
     volumes:
@@ -19,7 +19,7 @@ services:
       - MONGODB_INITDB_ROOT_USERNAME=orfarchiv
       - MONGODB_INITDB_ROOT_PASSWORD=orfarchiv
     ports:
-      - "27018:27017"
+      - '27018:27017'
     networks:
       - orfarchiv-db-network
     volumes:
@@ -32,7 +32,7 @@ services:
     environment:
       - ME_CONFIG_MONGODB_URL=mongodb://orfarchiv:orfarchiv@orfarchiv-db-1/?directConnection=true
     ports:
-      - "3002:8081"
+      - '3002:8081'
     networks:
       - orfarchiv-db-network
     depends_on:
