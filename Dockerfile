@@ -25,10 +25,6 @@ COPY --from=builder /app/dist/db.js .
 
 RUN mkdir -p /app/backup && chown 1000:1000 /app/backup
 
-VOLUME /app/backup
-
 USER 1000:1000
 
 ENTRYPOINT ["node", "db.js"]
-
-CMD ["backup", "--keep-running"]

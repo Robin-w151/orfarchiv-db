@@ -109,6 +109,6 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/robin-w151/orfarchiv-db-backup:latest,ghcr.io/robin-w151/orfarchiv-db-backup:${{ steps.set-version.outputs.APP_VERSION }}
+          tags: ghcr.io/robin-w151/orfarchiv-db:latest,ghcr.io/robin-w151/orfarchiv-db:${{ steps.set-version.outputs.APP_VERSION }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
