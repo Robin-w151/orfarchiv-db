@@ -14,6 +14,11 @@ The following 2 environment variables are available:
 - ORFARCHIV_DB_URL
 - ORFARCHIV_BACKUP_DIR
 
+## Setup
+
+This repository contains git submodules. Clone it with `git clone --recursive` or run
+`git submodule update --init --recursive` in an existing clone.
+
 ## Run
 
 1. docker-compose up -d
