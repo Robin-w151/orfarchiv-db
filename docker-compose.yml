@@ -1,29 +1,50 @@
-version: '3.8'
 services:
-  orfarchiv-db:
-    image: mongodb/mongodb-atlas-local
+  orfarchiv-db-1:
+    image: mongodb/mongodb-atlas-local:8.3.3
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=orfarchiv
+      - MONGODB_INITDB_ROOT_PASSWORD=orfarchiv
     ports:
-      - '27017:27017'
+      - "27017:27017"
     networks:
       - orfarchiv-db-network
     volumes:
-      - orfarchiv:/data/db
-      - orfarchiv-mongot:/data/mongot
+      - orfarchiv-db-1:/data/db
+      - orfarchiv-db-1-config:/data/configdb
+      - orfarchiv-db-1-mongot:/data/mongot
+    restart: unless-stopped
+  orfarchiv-db-2:
+    image: mongodb/mongodb-atlas-local:8.3.3
+    environment:
+      - MONGODB_INITDB_ROOT_USERNAME=orfarchiv
+      - MONGODB_INITDB_ROOT_PASSWORD=orfarchiv
+    ports:
+      - "27018:27017"
+    networks:
+      - orfarchiv-db-network
+    volumes:
+      - orfarchiv-db-2:/data/db
+      - orfarchiv-db-2-config:/data/configdb
+      - orfarchiv-db-2-mongot:/data/mongot
     restart: unless-stopped
   orfarchiv-db-ui:
     image: mongo-express
     environment:
-      - ME_CONFIG_MONGODB_URL=mongodb://orfarchiv-db:27017/?directConnection=true
+      - ME_CONFIG_MONGODB_URL=mongodb://orfarchiv:orfarchiv@orfarchiv-db-1/?directConnection=true
     ports:
-      - '3002:8081'
+      - "3002:8081"
     networks:
       - orfarchiv-db-network
     depends_on:
-      orfarchiv-db:
+      orfarchiv-db-1:
         condition: service_healthy
     restart: unless-stopped
 networks:
   orfarchiv-db-network:
 volumes:
-  orfarchiv:
-  orfarchiv-mongot:
+  orfarchiv-db-1:
+  orfarchiv-db-1-config:
+  orfarchiv-db-1-mongot:
+  orfarchiv-db-2:
+  orfarchiv-db-2-config:
+  orfarchiv-db-2-mongot:
