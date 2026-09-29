@@ -9,6 +9,7 @@ export const indexes: NamedIndexDescription[] = [
   {
     key: { id: 1 },
     name: 'id_asc',
+    unique: true,
   },
   {
     key: { id: -1 },
@@ -64,7 +65,8 @@ export function indexMatches(expected: NamedIndexDescription, actual: Document |
   return (
     !!actual &&
     actual.name === expected.name &&
-    Equal.equals(Object.entries(actual.key ?? {}), Object.entries(expected.key))
+    Equal.equals(Object.entries(actual.key ?? {}), Object.entries(expected.key)) &&
+    (actual.unique === true) === (expected.unique === true)
   );
 }
 

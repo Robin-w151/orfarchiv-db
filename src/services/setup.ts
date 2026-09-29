@@ -1,7 +1,7 @@
 import type { Target } from '#common/targets';
 import { Context, Effect, Layer, Result } from 'effect';
 import { formatError, SetupError } from '../shared/error';
-import { indexes, searchIndexDefinitionMatches, searchIndexes } from '../shared/model';
+import { indexes, indexMatches, searchIndexDefinitionMatches, searchIndexes } from '../shared/model';
 import { Database, type DatabaseConnection } from './database';
 
 export interface SetupOptions {
@@ -59,10 +59,42 @@ function defineService({ database }: { database: typeof Database.Service }) {
       }
 
       yield* Effect.log('Reconciling indexes...');
-      yield* connection.createNewsIndexes(indexes);
+      yield* reconcileIndexes(connection);
 
       yield* Effect.log('Reconciling search indexes...');
       yield* reconcileSearchIndexes(connection, recreateSearchIndexes);
+    });
+  }
+
+  function reconcileIndexes(connection: DatabaseConnection) {
+    return Effect.gen(function* () {
+      const existing = yield* connection.listNewsIndexes();
+      const pending = indexes.flatMap((index) => {
+        const current = existing.find((existing) => existing.name === index.name);
+        return indexMatches(index, current) ? [] : [{ index, current }];
+      });
+
+      for (const { index } of pending.filter(({ index }) => index.unique)) {
+        const duplicates = yield* connection.countDuplicates(index.key);
+        if (duplicates > 0) {
+          return yield* new SetupError({
+            message: `Index '${index.name}' must be unique, but ${duplicates} of its values are duplicated. Remove the duplicates and run setup again.`,
+          });
+        }
+      }
+
+      for (const { index, current } of pending) {
+        if (current) {
+          yield* Effect.log(`Index '${index.name}' changed, recreating...`);
+          yield* connection.dropNewsIndex(index.name);
+        } else {
+          yield* Effect.log(`Creating index '${index.name}'...`);
+        }
+      }
+
+      if (pending.length > 0) {
+        yield* connection.createNewsIndexes(pending.map(({ index }) => index));
+      }
     });
   }
 

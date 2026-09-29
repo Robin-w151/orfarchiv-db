@@ -146,6 +146,29 @@ function defineConnection(db: Db) {
     });
   }
 
+  function dropNewsIndex(name: string) {
+    return Effect.tryPromise({
+      try: () => news.dropIndex(name),
+      catch: (error) => new DatabaseError({ message: `Failed to drop index '${name}'.`, cause: error }),
+    });
+  }
+
+  function countDuplicates(key: Document) {
+    const group = Object.fromEntries(Object.keys(key).map((field) => [field, `$${field}`]));
+    return Effect.tryPromise({
+      try: async () => {
+        const [result] = await news
+          .aggregate<{ duplicates: number }>(
+            [{ $group: { _id: group, n: { $sum: 1 } } }, { $match: { n: { $gt: 1 } } }, { $count: 'duplicates' }],
+            { allowDiskUse: true },
+          )
+          .toArray();
+        return result?.duplicates ?? 0;
+      },
+      catch: (error) => new DatabaseError({ message: 'Failed to count duplicates.', cause: error }),
+    });
+  }
+
   function listNewsIndexes() {
     return Effect.tryPromise({
       try: () => news.listIndexes().toArray(),
@@ -198,6 +221,8 @@ function defineConnection(db: Db) {
     newsCollectionExists,
     createNewsCollection,
     createNewsIndexes,
+    dropNewsIndex,
+    countDuplicates,
     listNewsIndexes,
     listNewsSearchIndexes,
     createNewsSearchIndex,

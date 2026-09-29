@@ -89,7 +89,7 @@ function defineService({ database }: { database: typeof Database.Service }) {
         if (!existing) {
           problems.push(`index '${index.name}' missing`);
         } else if (!indexMatches(index, existing)) {
-          problems.push(`index '${index.name}' has a different key`);
+          problems.push(`index '${index.name}' has a different definition`);
         }
       }
 
