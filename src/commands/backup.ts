@@ -7,11 +7,11 @@ import { dbCommand } from './db';
 export const backupCommand = Command.make(
   'backup',
   {
-    keepRunning: Flag.boolean('keep-running').pipe(
+    keepRunning: Flag.Boolean('keep-running').pipe(
       Flag.withDefault(false),
       Flag.withDescription('Keep running until interrupted'),
     ),
-    cron: Flag.string('cron').pipe(
+    cron: Flag.String('cron').pipe(
       Flag.withDefault('0 0 3 * * *'),
       Flag.mapTryCatch(
         (cron) => Cron.parseUnsafe(cron),

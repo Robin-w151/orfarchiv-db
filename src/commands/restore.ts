@@ -7,19 +7,19 @@ import { dbCommand } from './db';
 export const restoreCommand = Command.make(
   'restore',
   {
-    file: Argument.string('file').pipe(
+    file: Argument.String('file').pipe(
       Argument.withDescription('Backup JSON file (default: newest *.json in ORFARCHIV_BACKUP_DIR/<label>)'),
       Argument.optional,
     ),
-    batchSize: Flag.integer('batch-size').pipe(
+    batchSize: Flag.Int('batch-size').pipe(
       Flag.withDefault(1000),
       Flag.withDescription('Documents per bulk write (default: 1000)'),
     ),
-    dryRun: Flag.boolean('dry-run').pipe(
+    dryRun: Flag.Boolean('dry-run').pipe(
       Flag.withDefault(false),
       Flag.withDescription('Parse and report without writing'),
     ),
-    all: Flag.boolean('all').pipe(
+    all: Flag.Boolean('all').pipe(
       Flag.withDefault(false),
       Flag.withDescription('Restore to all targets instead of only the first one'),
     ),

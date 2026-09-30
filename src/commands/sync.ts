@@ -8,17 +8,17 @@ import { dbCommand } from './db';
 export const syncCommand = Command.make(
   'sync',
   {
-    from: Flag.string('from').pipe(Flag.withDescription('Label of the target to copy from')),
-    to: Flag.string('to').pipe(Flag.withDescription('Label of the target to copy into')),
-    since: Flag.date('since').pipe(
+    from: Flag.String('from').pipe(Flag.withDescription('Label of the target to copy from')),
+    to: Flag.String('to').pipe(Flag.withDescription('Label of the target to copy into')),
+    since: Flag.Date('since').pipe(
       Flag.optional,
       Flag.withDescription('Only copy stories with a timestamp at or after this ISO date'),
     ),
-    batchSize: Flag.integer('batch-size').pipe(
+    batchSize: Flag.Int('batch-size').pipe(
       Flag.withDefault(1000),
       Flag.withDescription('Documents per bulk write (default: 1000)'),
     ),
-    dryRun: Flag.boolean('dry-run').pipe(
+    dryRun: Flag.Boolean('dry-run').pipe(
       Flag.withDefault(false),
       Flag.withDescription('Count the stories that would be copied without writing'),
     ),

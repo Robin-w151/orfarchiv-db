@@ -7,7 +7,7 @@ import { dbCommand } from './db';
 export const setupCommand = Command.make(
   'setup',
   {
-    recreateSearchIndexes: Flag.boolean('recreate-search-indexes').pipe(
+    recreateSearchIndexes: Flag.Boolean('recreate-search-indexes').pipe(
       Flag.withDefault(false),
       Flag.withDescription('Drop and recreate search indexes whose definition changed'),
     ),

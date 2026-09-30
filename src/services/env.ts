@@ -16,7 +16,7 @@ export class Environment extends Context.Service<Environment>()('Environment', {
 function defineService({ fs }: { fs: FileSystem.FileSystem }) {
   function loadEnvVariable(name: string, fallback: string): Effect.Effect<string> {
     return pipe(
-      Config.string(`${name}_FILE`),
+      Config.String(`${name}_FILE`),
       Effect.andThen((file) =>
         pipe(
           fs.readFileString(file),
@@ -27,7 +27,7 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
           Effect.tapError((error) => Effect.logWarning(`${error}`)),
         ),
       ),
-      Effect.catch(() => Config.string(name)),
+      Effect.catch(() => Config.String(name)),
       Effect.catch(() => Effect.succeed(fallback)),
     );
   }
