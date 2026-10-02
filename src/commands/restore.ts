@@ -1,5 +1,5 @@
 import { Effect, Option } from 'effect';
-import { Argument, Command, Flag } from 'effect/unstable/cli';
+import { Argument, Command, Flag } from 'effect/cli';
 import { Restore } from '../services/restore';
 import { Targets } from '../services/targets';
 import { dbCommand } from './db';

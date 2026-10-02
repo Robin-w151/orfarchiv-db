@@ -10,12 +10,14 @@
     "start": "bun run src/index.ts",
     "build": "vite build",
     "lint": "prettier --check . && eslint . && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-rc.117",
+    "@effect/platform-node": "4.0.0-rc.118",
     "dotenv-flow": "4.1.0",
-    "effect": "4.0.0-rc.117",
+    "effect": "4.0.0-rc.118",
     "mongodb": "7.6.0",
     "winston": "3.19.0"
   },
@@ -38,11 +40,13 @@
     "semantic-release-gha-output": "1.1.5",
     "typescript": "5.9.3",
     "typescript-eslint": "8.70.1",
-    "vite": "8.3.1"
+    "vite": "8.3.1",
+    "vitest": "4.1.11"
   },
   "overrides": {
     "conventional-changelog-conventionalcommits": ">=8.0.0",
-    "glob": ">=10.5.0"
+    "glob": ">=10.5.0",
+    "@effect/platform-node-shared": "$@effect/platform-node"
   },
   "engines": {
     "node": "24.x"

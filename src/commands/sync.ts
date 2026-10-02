@@ -1,5 +1,5 @@
 import { Effect, Option } from 'effect';
-import { Command, Flag } from 'effect/unstable/cli';
+import { Command, Flag } from 'effect/cli';
 import { TargetError } from '../shared/error';
 import { Sync } from '../services/sync';
 import { Targets } from '../services/targets';

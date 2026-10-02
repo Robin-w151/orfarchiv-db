@@ -7,7 +7,10 @@ export class SetupError extends Data.TaggedError('SetupError')<{ message: string
 export class BackupError extends Data.TaggedError('BackupError')<{ message: string }> {}
 export class RestoreError extends Data.TaggedError('RestoreError')<{ message: string }> {}
 export class SyncError extends Data.TaggedError('SyncError')<{ message: string }> {}
-export class VerifyError extends Data.TaggedError('VerifyError')<{ message: string }> {}
+export class VerifyError extends Data.TaggedError('VerifyError')<{
+  message: string;
+  summaries: ReadonlyArray<string>;
+}> {}
 
 // System errors
 export class IOError extends Data.TaggedError('IOError')<{ message: string; cause: unknown }> {}
@@ -35,4 +38,16 @@ export function formatError(
   const cause = error.cause === undefined ? '' : `\nCause: ${error.cause}`;
   const stack = withStack && error.stack ? `\nStack: ${error.stack}` : '';
   return `${message}${cause}${stack}`;
+}
+
+export function formatDefect(defect: unknown, options: { withStack?: boolean } = {}): string {
+  if (defect instanceof Error) {
+    return formatError(defect, options);
+  }
+
+  try {
+    return typeof defect === 'object' && defect !== null ? JSON.stringify(defect) : String(defect);
+  } catch {
+    return String(defect);
+  }
 }

@@ -1,6 +1,7 @@
 import { parseTargets, type Target } from '#common/targets';
 import { NodeFileSystem } from '@effect/platform-node';
 import { Config, Context, Effect, FileSystem, Layer, pipe } from 'effect';
+import { hostname } from 'node:os';
 import { IOError } from '../shared/error';
 
 export class Environment extends Context.Service<Environment>()('Environment', {
@@ -27,7 +28,7 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
           Effect.tapError((error) => Effect.logWarning(`${error}`)),
         ),
       ),
-      Effect.catch(() => Config.String(name)),
+      Effect.catch(() => Config.String(name).pipe(Effect.map((value) => value.trim()))),
       Effect.catch(() => Effect.succeed(fallback)),
     );
   }
@@ -47,5 +48,8 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
     dbConnectionUrl,
     dbTargets,
     backupDir: loadEnvVariable('ORFARCHIV_BACKUP_DIR', './backup'),
+    serverLabel: loadEnvVariable('ORFARCHIV_SERVER_LABEL', hostname()),
+    telegramBotToken: loadEnvVariable('ORFARCHIV_TELEGRAM_BOT_TOKEN', ''),
+    telegramChatId: loadEnvVariable('ORFARCHIV_TELEGRAM_CHAT_ID', ''),
   };
 }

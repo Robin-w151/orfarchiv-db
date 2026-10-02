@@ -1,8 +1,12 @@
 import type { Target } from '#common/targets';
-import { Context, Effect, Layer, Result } from 'effect';
-import { formatError, VerifyError } from '../shared/error';
+import { Context, Cron, Duration, Effect, Layer, Result, Schedule } from 'effect';
+import { formatDefect, formatError, VerifyError } from '../shared/error';
 import { indexes, indexMatches, searchIndexDefinitionMatches, searchIndexes } from '../shared/model';
 import { Database } from './database';
+import { logNotificationState, Notifier } from './notifier';
+
+const RETRIES = 1;
+const RETRY_DELAY = Duration.minutes(2);
 
 interface TargetReport {
   readonly target: Target;
@@ -15,14 +19,24 @@ interface TargetReport {
 export class Verify extends Context.Service<Verify>()('Verify', {
   make: Effect.gen(function* () {
     const database = yield* Database;
-    return defineService({ database });
+    const notifier = yield* Notifier;
+    return defineService({ database, notifier });
   }),
 }) {
   static readonly layerWithoutDependencies = Layer.effect(this, this.make);
-  static readonly layer = this.layerWithoutDependencies.pipe(Layer.provide(Database.layer));
+  static readonly layer = this.layerWithoutDependencies.pipe(
+    Layer.provide(Database.layer),
+    Layer.provide(Notifier.layer),
+  );
 }
 
-function defineService({ database }: { database: typeof Database.Service }) {
+function defineService({
+  database,
+  notifier,
+}: {
+  database: typeof Database.Service;
+  notifier: typeof Notifier.Service;
+}) {
   function verify(targets: ReadonlyArray<Target>) {
     return Effect.gen(function* () {
       const results = yield* Effect.forEach(targets, (target) => inspect(target).pipe(Effect.result), {
@@ -34,19 +48,22 @@ function defineService({ database }: { database: typeof Database.Service }) {
         failures.set(target.label, [...(failures.get(target.label) ?? []), reason]);
 
       const reports: Array<TargetReport> = [];
+      const summaries: Array<string> = [];
       for (const [index, result] of results.entries()) {
         const target = targets[index];
         if (Result.isFailure(result)) {
-          yield* Effect.logError(`[${target.label}] Unreachable: ${formatError(result.failure)}`);
+          const summary = `[${target.label}] Unreachable: ${formatError(result.failure)}`;
+          summaries.push(summary);
+          yield* Effect.logError(summary);
           addFailure(target, 'unreachable');
           continue;
         }
 
         const report = result.success;
         reports.push(report);
-        yield* Effect.log(
-          `[${target.label}] ${report.count} stories, latest ${report.latestTimestamp?.toISOString() ?? 'none'}, ${report.missingEmbeddings} without embedding, ${report.problems.length === 0 ? 'indexes ok' : report.problems.join(', ')}`,
-        );
+        const summary = `[${target.label}] ${report.count} stories, latest ${report.latestTimestamp?.toISOString() ?? 'none'}, ${report.missingEmbeddings} without embedding, ${report.problems.length === 0 ? 'indexes ok' : report.problems.join(', ')}`;
+        summaries.push(summary);
+        yield* Effect.log(summary);
         report.problems.forEach((problem) => addFailure(target, problem));
       }
 
@@ -62,6 +79,7 @@ function defineService({ database }: { database: typeof Database.Service }) {
           message: `Verification failed for ${failures.size} of ${targets.length} targets: ${[...failures]
             .map(([label, reasons]) => `'${label}' (${reasons.join('; ')})`)
             .join(', ')}`,
+          summaries,
         });
       }
 
@@ -113,8 +131,41 @@ function defineService({ database }: { database: typeof Database.Service }) {
     }).pipe(Effect.scoped);
   }
 
+  function scheduleVerify(cron: Cron.Cron, targets: ReadonlyArray<Target>) {
+    const verifyWithRetry = verify(targets).pipe(
+      Effect.retry({
+        times: RETRIES,
+        schedule: Schedule.spaced(RETRY_DELAY).pipe(
+          Schedule.tap(({ attempt, input }) =>
+            attempt <= RETRIES
+              ? Effect.logWarning(`${input.message}. Retrying in ${Duration.format(RETRY_DELAY)}...`)
+              : Effect.void,
+          ),
+        ),
+      }),
+      Effect.catchTag('VerifyError', (error) =>
+        Effect.gen(function* () {
+          yield* Effect.logError(error.message);
+          yield* notifier.notify(['🔴 orfarchiv verify failed', ...error.summaries, '', error.message].join('\n'));
+        }),
+      ),
+      Effect.catchDefect((defect) =>
+        Effect.gen(function* () {
+          yield* Effect.logError(`Verify crashed: ${formatDefect(defect, { withStack: true })}`);
+          yield* notifier.notify(`🔴 orfarchiv verify crashed\n${formatDefect(defect)}`);
+        }),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      yield* logNotificationState(notifier);
+      yield* Effect.schedule(verifyWithRetry, Schedule.cron(cron));
+    });
+  }
+
   return {
     verify,
+    scheduleVerify,
   };
 }
 
