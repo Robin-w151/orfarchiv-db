@@ -1,4 +1,4 @@
-import { Command } from 'effect/unstable/cli';
+import { Command } from 'effect/cli';
 import { backupCommand } from './backup';
 import { dbCommand } from './db';
 import { restoreCommand } from './restore';

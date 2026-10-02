@@ -1,4 +1,4 @@
-import { Command, Flag } from 'effect/unstable/cli';
+import { Command, Flag } from 'effect/cli';
 
 export const dbCommand = Command.make('db').pipe(
   Command.withDescription('ORF Archiv database utilities'),

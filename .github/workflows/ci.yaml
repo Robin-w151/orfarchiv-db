@@ -26,6 +26,8 @@ jobs:
         run: aikido-npm ci
       - name: Run linter
         run: npm run lint
+      - name: Run tests
+        run: npm test
   release:
     name: release
     runs-on: ubuntu-latest
