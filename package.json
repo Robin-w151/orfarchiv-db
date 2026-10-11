@@ -15,9 +15,9 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-rc.118",
+    "@effect/platform-node": "4.0.2",
     "dotenv-flow": "4.1.0",
-    "effect": "4.0.0-rc.118",
+    "effect": "4.0.2",
     "mongodb": "7.6.0",
     "winston": "3.19.0"
   },
