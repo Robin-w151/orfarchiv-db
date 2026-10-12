@@ -21,12 +21,16 @@ const DB_NAME = 'orfarchiv';
 const NEWS_COLLECTION = 'news';
 const CURSOR_BATCH_SIZE = 1000;
 const STORY_FIELDS: ReadonlyArray<string> = ['id', 'title', 'category', 'url', 'timestamp', 'source'];
-export const SYNC_FIELDS: ReadonlyArray<string> = [
-  ...STORY_FIELDS,
-  TITLE_EMBEDDING_FIELD,
+const SYNC_FIELDS_WITHOUT_CONTENT: ReadonlyArray<string> = [...STORY_FIELDS, TITLE_EMBEDDING_FIELD];
+const SYNC_FIELDS: ReadonlyArray<string> = [
+  ...SYNC_FIELDS_WITHOUT_CONTENT,
   CONTENT_EMBEDDING_FIELD,
   CONTENT_STATUS_FIELD,
 ];
+
+export function syncFieldsFor({ content }: { content: boolean }) {
+  return content ? SYNC_FIELDS : SYNC_FIELDS_WITHOUT_CONTENT;
+}
 
 export interface UpsertResult {
   readonly upserted: number;
@@ -105,6 +109,16 @@ function defineConnection(db: Db) {
     return Effect.tryPromise({
       try: () => news.countDocuments({ [CONTENT_STATUS_FIELD]: null }),
       catch: (error) => new DatabaseError({ message: 'Failed to count stories without content status.', cause: error }),
+    });
+  }
+
+  function countNewsWithContent() {
+    return Effect.tryPromise({
+      try: () =>
+        news.countDocuments({
+          $or: [{ [CONTENT_EMBEDDING_FIELD]: { $exists: true } }, { [CONTENT_STATUS_FIELD]: { $exists: true } }],
+        }),
+      catch: (error) => new DatabaseError({ message: 'Failed to count stories with content.', cause: error }),
     });
   }
 
@@ -237,6 +251,7 @@ function defineConnection(db: Db) {
     countNews,
     countNewsWithoutEmbedding,
     countNewsWithoutContentStatus,
+    countNewsWithContent,
     latestNewsTimestamp,
     upsertNews,
     newsCollectionExists,

@@ -4,12 +4,14 @@ import { TestClock } from 'effect/testing';
 import type { Document } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { DatabaseError } from '../shared/error';
-import { indexes, searchIndexes, type NamedSearchIndexDescription } from '../shared/model';
+import { indexesFor, searchIndexesFor, type NamedSearchIndexDescription } from '../shared/model';
 import { Database, type DatabaseConnection, type SearchIndexState } from './database';
 import { Setup, type SetupOptions } from './setup';
 
-const TARGET: Target = { url: 'mongodb://localhost', label: 'localhost' };
-const [VECTOR_INDEX] = searchIndexes;
+const TARGET: Target = { url: 'mongodb://localhost', label: 'localhost', content: true };
+const EXCLUDED_TARGET: Target = { ...TARGET, content: false };
+const [VECTOR_INDEX] = searchIndexesFor({ content: true });
+const [TITLE_ONLY_VECTOR_INDEX] = searchIndexesFor({ content: false });
 const OLD_DEFINITION: Document = {
   fields: (VECTOR_INDEX.definition.fields as Array<Document>).filter((field) => field.path !== 'contentEmbedding'),
 };
@@ -18,6 +20,11 @@ const READY: SearchIndexState = { definition: VECTOR_INDEX.definition, status: '
 const BUILDING: SearchIndexState = { definition: VECTOR_INDEX.definition, status: 'BUILDING', queryable: false };
 const FAILED: SearchIndexState = { definition: VECTOR_INDEX.definition, status: 'FAILED', queryable: false };
 const OLD_READY: SearchIndexState = { definition: OLD_DEFINITION, status: 'READY', queryable: true };
+const TITLE_ONLY_READY: SearchIndexState = {
+  definition: TITLE_ONLY_VECTOR_INDEX.definition,
+  status: 'READY',
+  queryable: true,
+};
 const UNREACHABLE = 'unreachable';
 
 const OPTIONS: SetupOptions = {
@@ -31,17 +38,25 @@ interface FakeDatabase {
   readonly pollTimes: Array<number>;
   readonly logs: Array<string>;
   readonly layer: Layer.Layer<Setup>;
+  readonly created: Array<Document>;
 }
 
-function fakeDatabase(states: ReadonlyArray<SearchIndexState | typeof UNREACHABLE | undefined>): FakeDatabase {
+function fakeDatabase(
+  states: ReadonlyArray<SearchIndexState | typeof UNREACHABLE | undefined>,
+  existingIndexes: ReadonlyArray<Document> = indexesFor({ content: true }),
+): FakeDatabase {
   const calls: Array<string> = [];
   const pollTimes: Array<number> = [];
   const logs: Array<string> = [];
   let poll = 0;
 
+  const created: Array<Document> = [];
   const connection = {
     newsCollectionExists: () => Effect.succeed(true),
-    listNewsIndexes: () => Effect.succeed(indexes as Array<Document>),
+    listNewsIndexes: () => Effect.succeed([...existingIndexes]),
+    dropNewsIndex: (name: string) => Effect.sync(() => calls.push(`drop index ${name}`)),
+    createNewsIndexes: (indexes: Array<Document>) =>
+      Effect.sync(() => calls.push(`create indexes ${indexes.map((index) => index.name).join(', ')}`)),
     listNewsSearchIndexes: () =>
       Effect.gen(function* () {
         pollTimes.push(yield* Clock.currentTimeMillis);
@@ -52,7 +67,10 @@ function fakeDatabase(states: ReadonlyArray<SearchIndexState | typeof UNREACHABL
         return new Map(state ? [[VECTOR_INDEX.name, state]] : []);
       }),
     createNewsSearchIndex: (searchIndex: NamedSearchIndexDescription) =>
-      Effect.sync(() => calls.push(`create ${searchIndex.name}`)),
+      Effect.sync(() => {
+        calls.push(`create ${searchIndex.name}`);
+        created.push(searchIndex.definition);
+      }),
     dropNewsSearchIndex: (name: string) => Effect.sync(() => calls.push(`drop ${name}`)),
   } as unknown as DatabaseConnection;
 
@@ -65,14 +83,19 @@ function fakeDatabase(states: ReadonlyArray<SearchIndexState | typeof UNREACHABL
     Layer.provideMerge(Logger.layer([logger])),
   );
 
-  return { calls, pollTimes, logs, layer };
+  return { calls, pollTimes, logs, created, layer };
 }
 
-function runSetup(fake: FakeDatabase, options: Partial<SetupOptions>, advance: Duration.Input = 0) {
+function runSetup(
+  fake: FakeDatabase,
+  options: Partial<SetupOptions>,
+  advance: Duration.Input = 0,
+  target: Target = TARGET,
+) {
   return Effect.runPromise(
     Effect.gen(function* () {
       const setup = yield* Setup;
-      const fiber = yield* Effect.forkChild(setup.setup([TARGET], { ...OPTIONS, ...options }).pipe(Effect.exit));
+      const fiber = yield* Effect.forkChild(setup.setup([target], { ...OPTIONS, ...options }).pipe(Effect.exit));
       const steps = Duration.toSeconds(advance);
       for (let step = 0; step < steps; step++) {
         yield* TestClock.adjust('1 second');
@@ -119,6 +142,54 @@ describe('Setup', () => {
 
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(fake.calls).toEqual(['drop news_title_vector', 'create news_title_vector']);
+    });
+  });
+
+  describe('content-excluded targets', () => {
+    it('creates a title-only search index', async () => {
+      const fake = fakeDatabase([undefined], indexesFor({ content: false }));
+
+      const exit = await runSetup(fake, {}, 0, EXCLUDED_TARGET);
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(fake.calls).toEqual(['create news_title_vector']);
+      expect(fake.created).toEqual([TITLE_ONLY_VECTOR_INDEX.definition]);
+    });
+
+    it('leaves an up-to-date title-only search index alone', async () => {
+      const fake = fakeDatabase([TITLE_ONLY_READY], indexesFor({ content: false }));
+
+      const exit = await runSetup(fake, {}, 0, EXCLUDED_TARGET);
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(fake.calls).toEqual([]);
+    });
+
+    it('treats a search index with the content path as changed', async () => {
+      const fake = fakeDatabase([READY], indexesFor({ content: false }));
+
+      const exit = await runSetup(fake, {}, 0, EXCLUDED_TARGET);
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(fake.logs.join('\n')).toContain('Search index definitions changed: news_title_vector');
+    });
+
+    it('drops the content status index and creates no content index', async () => {
+      const fake = fakeDatabase([TITLE_ONLY_READY]);
+
+      const exit = await runSetup(fake, {}, 0, EXCLUDED_TARGET);
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(fake.calls).toEqual(['drop index content_status_timestamp']);
+    });
+
+    it('creates the content status index on content targets', async () => {
+      const fake = fakeDatabase([READY], indexesFor({ content: false }));
+
+      const exit = await runSetup(fake, {});
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(fake.calls).toEqual(['create indexes content_status_timestamp']);
     });
   });
 

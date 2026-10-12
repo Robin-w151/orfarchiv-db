@@ -2,10 +2,12 @@ import type { Target } from '#common/targets/targets';
 import { Context, Duration, Effect, Layer, Result, Schedule } from 'effect';
 import { formatError, SetupError } from '../shared/error';
 import {
-  indexes,
+  CONTENT_STATUS_INDEX,
+  indexesFor,
   indexMatches,
   searchIndexDefinitionMatches,
-  searchIndexes,
+  searchIndexesFor,
+  type ContentCapability,
   type NamedSearchIndexDescription,
 } from '../shared/model';
 import { Database, type DatabaseConnection, type SearchIndexState } from './database';
@@ -55,11 +57,11 @@ function defineService({ database }: { database: typeof Database.Service }) {
     return Effect.gen(function* () {
       yield* Effect.log(`[${target.label}] Connecting to server...`);
       const connection = yield* database.connect(target);
-      yield* setupDb(connection, options);
+      yield* setupDb(connection, target, options);
     }).pipe(Effect.scoped);
   }
 
-  function setupDb(connection: DatabaseConnection, options: SetupOptions) {
+  function setupDb(connection: DatabaseConnection, capability: ContentCapability, options: SetupOptions) {
     return Effect.gen(function* () {
       yield* Effect.log('Creating orfarchiv DB...');
 
@@ -69,17 +71,22 @@ function defineService({ database }: { database: typeof Database.Service }) {
       }
 
       yield* Effect.log('Reconciling indexes...');
-      yield* reconcileIndexes(connection);
+      yield* reconcileIndexes(connection, capability);
 
       yield* Effect.log('Reconciling search indexes...');
-      yield* reconcileSearchIndexes(connection, options);
+      yield* reconcileSearchIndexes(connection, capability, options);
     });
   }
 
-  function reconcileIndexes(connection: DatabaseConnection) {
+  function reconcileIndexes(connection: DatabaseConnection, capability: ContentCapability) {
     return Effect.gen(function* () {
       const existing = yield* connection.listNewsIndexes();
-      const pending = indexes.flatMap((index) => {
+      if (!capability.content && existing.some((index) => index.name === CONTENT_STATUS_INDEX)) {
+        yield* Effect.log(`Dropping index '${CONTENT_STATUS_INDEX}', target is excluded from content embeddings...`);
+        yield* connection.dropNewsIndex(CONTENT_STATUS_INDEX);
+      }
+
+      const pending = indexesFor(capability).flatMap((index) => {
         const current = existing.find((existing) => existing.name === index.name);
         return indexMatches(index, current) ? [] : [{ index, current }];
       });
@@ -108,12 +115,16 @@ function defineService({ database }: { database: typeof Database.Service }) {
     });
   }
 
-  function reconcileSearchIndexes(connection: DatabaseConnection, options: SetupOptions) {
+  function reconcileSearchIndexes(
+    connection: DatabaseConnection,
+    capability: ContentCapability,
+    options: SetupOptions,
+  ) {
     return Effect.gen(function* () {
       const existing = yield* connection.listNewsSearchIndexes();
       const changedNames: Array<string> = [];
 
-      for (const searchIndex of searchIndexes) {
+      for (const searchIndex of searchIndexesFor(capability)) {
         if (!existing.has(searchIndex.name)) {
           yield* Effect.log(`Creating search index '${searchIndex.name}'...`);
           yield* connection.createNewsSearchIndex(searchIndex);

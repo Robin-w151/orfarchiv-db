@@ -9,10 +9,15 @@ start a local _MongoDB_ instance. Additionally, it also starts a _mongo-express_
 a web UI.
 
 The backup script can connect to any _MongoDB_ server and export all news content to the specified backup directory.
-The following 2 environment variables are available:
+The following environment variables are available:
 
 - ORFARCHIV_DB_URL
 - ORFARCHIV_BACKUP_DIR
+- ORFARCHIV_CONTENT_EMBEDDING_EXCLUDED_TARGETS: target labels separated by `;` (e.g. the Atlas M0
+  `<cluster>.mongodb.net`) that never hold content embeddings. `setup` creates their `news_title_vector` index without
+  the `contentEmbedding` path and without the `content_status_timestamp` index, `sync` doesn't copy `contentEmbedding`
+  and `contentStatus` to them, and `verify` fails if they contain either field. `targets` shows each target's
+  capability. Default: empty, every target gets content.
 
 ## Setup
 

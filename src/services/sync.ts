@@ -2,7 +2,7 @@ import { NEWS_TITLE_VECTOR_INDEX } from '#common/search/search.constants';
 import type { Target } from '#common/targets/targets';
 import { Context, Effect, Layer, Stream } from 'effect';
 import { SyncError } from '../shared/error';
-import { Database, SYNC_FIELDS, type UpsertResult } from './database';
+import { Database, syncFieldsFor, type UpsertResult } from './database';
 
 export interface SyncOptions {
   readonly from: Target;
@@ -48,6 +48,11 @@ function defineService({ database }: { database: typeof Database.Service }) {
         yield* Effect.logWarning(`[${to.label}] Search index '${NEWS_TITLE_VECTOR_INDEX}' is missing, run setup.`);
       }
 
+      if (!to.content) {
+        yield* Effect.log(`[${to.label}] Target is excluded from content embeddings, skipping content fields.`);
+      }
+
+      const fields = syncFieldsFor(to);
       yield* Effect.log(`[${to.label}] Syncing ${total} stories${scope} from '${from.label}'...`);
       const totals = yield* fromConnection.streamNews({ since }).pipe(
         Stream.grouped(Math.max(1, batchSize)),
@@ -55,7 +60,7 @@ function defineService({ database }: { database: typeof Database.Service }) {
           () => ({ read: 0, upserted: 0, modified: 0, matched: 0, skipped: 0 }),
           (totals, stories) =>
             Effect.gen(function* () {
-              const result = yield* toConnection.upsertNews(stories, SYNC_FIELDS);
+              const result = yield* toConnection.upsertNews(stories, fields);
               const next = addResult(totals, stories.length, result);
               yield* Effect.log(`[${to.label}] Synced ${next.read}/${total} stories.`);
               return next;

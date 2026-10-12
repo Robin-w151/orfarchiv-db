@@ -1,11 +1,11 @@
 import type { Document } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { indexes, searchIndexDefinitionMatches, searchIndexes } from './model';
+import { indexesFor, searchIndexDefinitionMatches, searchIndexesFor } from './model';
 
-const [VECTOR_INDEX] = searchIndexes;
+const [VECTOR_INDEX] = searchIndexesFor({ content: true });
 const FIELDS = VECTOR_INDEX.definition.fields as Array<Document>;
 
-describe('searchIndexes', () => {
+describe('searchIndexesFor', () => {
   it('defines news_title_vector with a title and a content vector path and three filters', () => {
     expect(VECTOR_INDEX.name).toBe('news_title_vector');
     expect(FIELDS).toEqual([
@@ -16,14 +16,26 @@ describe('searchIndexes', () => {
       { type: 'filter', path: 'category' },
     ]);
   });
+
+  it('defines news_title_vector without the content path for excluded targets', () => {
+    const [titleOnly] = searchIndexesFor({ content: false });
+    expect(titleOnly.name).toBe('news_title_vector');
+    expect(titleOnly.definition.fields).toEqual(FIELDS.filter((field) => field.path !== 'contentEmbedding'));
+  });
 });
 
-describe('indexes', () => {
+describe('indexesFor', () => {
   it('has a content status index for the newest-first content backlog', () => {
-    expect(indexes.find((index) => index.name === 'content_status_timestamp')?.key).toEqual({
+    expect(indexesFor({ content: true }).find((index) => index.name === 'content_status_timestamp')?.key).toEqual({
       contentStatus: 1,
       timestamp: -1,
     });
+  });
+
+  it('has no content status index for excluded targets', () => {
+    const titleOnly = indexesFor({ content: false });
+    expect(titleOnly.map((index) => index.name)).not.toContain('content_status_timestamp');
+    expect(titleOnly).toHaveLength(indexesFor({ content: true }).length - 1);
   });
 });
 

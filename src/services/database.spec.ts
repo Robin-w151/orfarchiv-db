@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toBackupStory } from './database';
+import { syncFieldsFor, toBackupStory } from './database';
 
 const STORY = { id: 'news:1', title: 'Teuerung befeuert die Schwarzarbeit' };
 
@@ -14,5 +14,20 @@ describe('toBackupStory', () => {
 
   it('leaves stories without a content status unchanged', () => {
     expect(toBackupStory(STORY)).toEqual(STORY);
+  });
+});
+
+describe('syncFieldsFor', () => {
+  it('copies the content fields to content targets', () => {
+    expect(syncFieldsFor({ content: true })).toEqual(
+      expect.arrayContaining(['id', 'titleEmbedding', 'contentEmbedding', 'contentStatus']),
+    );
+  });
+
+  it('copies no content fields to excluded targets', () => {
+    const fields = syncFieldsFor({ content: false });
+    expect(fields).toEqual(expect.arrayContaining(['id', 'title', 'timestamp', 'titleEmbedding']));
+    expect(fields).not.toContain('contentEmbedding');
+    expect(fields).not.toContain('contentStatus');
   });
 });
