@@ -1,4 +1,4 @@
-import type { Target } from '#common/targets';
+import type { Target } from '#common/targets/targets';
 import { NodeFileSystem } from '@effect/platform-node';
 import { Context, Effect, FileSystem, Layer, Result } from 'effect';
 import type { Document } from 'mongodb';

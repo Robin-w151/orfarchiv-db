@@ -1,7 +1,7 @@
 import { Logger } from 'effect';
 import type { LogLevel } from 'effect';
 import { createLogger, format, transports } from 'winston';
-import { redact } from '#common/targets';
+import { redact } from '#common/targets/targets';
 const { align, colorize, combine, printf, timestamp } = format;
 
 const logger = createLogger({

@@ -1,4 +1,4 @@
-import { redact } from '#common/targets';
+import { redact } from '#common/targets/targets';
 import { Cause, Context, Duration, Effect, Layer, Schedule } from 'effect';
 import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from 'effect/http';
 import { Environment } from './env';

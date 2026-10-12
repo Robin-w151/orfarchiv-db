@@ -1,5 +1,5 @@
-import { NEWS_TITLE_VECTOR_INDEX } from '#common/search';
-import type { Target } from '#common/targets';
+import { NEWS_TITLE_VECTOR_INDEX } from '#common/search/search.constants';
+import type { Target } from '#common/targets/targets';
 import { Context, Effect, Layer, Stream } from 'effect';
 import { SyncError } from '../shared/error';
 import { Database, SYNC_FIELDS, type UpsertResult } from './database';

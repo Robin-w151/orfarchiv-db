@@ -1,4 +1,4 @@
-import type { Target } from '#common/targets';
+import type { Target } from '#common/targets/targets';
 import { Context, Cron, Duration, Effect, Layer, Result, Schedule } from 'effect';
 import { formatDefect, formatError, VerifyError } from '../shared/error';
 import { indexes, indexMatches, searchIndexDefinitionMatches, searchIndexes } from '../shared/model';
@@ -13,6 +13,7 @@ interface TargetReport {
   readonly count: number;
   readonly latestTimestamp: Date | undefined;
   readonly missingEmbeddings: number;
+  readonly missingContent: number;
   readonly problems: ReadonlyArray<string>;
 }
 
@@ -61,7 +62,7 @@ function defineService({
 
         const report = result.success;
         reports.push(report);
-        const summary = `[${target.label}] ${report.count} stories, latest ${report.latestTimestamp?.toISOString() ?? 'none'}, ${report.missingEmbeddings} without embedding, ${report.problems.length === 0 ? 'indexes ok' : report.problems.join(', ')}`;
+        const summary = `[${target.label}] ${report.count} stories, latest ${report.latestTimestamp?.toISOString() ?? 'none'}, ${report.missingEmbeddings} without embedding, ${report.missingContent} without content, ${report.problems.length === 0 ? 'indexes ok' : report.problems.join(', ')}`;
         summaries.push(summary);
         yield* Effect.log(summary);
         report.problems.forEach((problem) => addFailure(target, problem));
@@ -90,16 +91,18 @@ function defineService({
   function inspect(target: Target) {
     return Effect.gen(function* () {
       const connection = yield* database.connect(target);
-      const [count, latestTimestamp, missingEmbeddings, existingIndexes, existingSearchIndexes] = yield* Effect.all(
-        [
-          connection.countNews({}),
-          connection.latestNewsTimestamp(),
-          connection.countNewsWithoutEmbedding(),
-          connection.listNewsIndexes(),
-          connection.listNewsSearchIndexes(),
-        ],
-        { concurrency: 'unbounded' },
-      );
+      const [count, latestTimestamp, missingEmbeddings, missingContent, existingIndexes, existingSearchIndexes] =
+        yield* Effect.all(
+          [
+            connection.countNews({}),
+            connection.latestNewsTimestamp(),
+            connection.countNewsWithoutEmbedding(),
+            connection.countNewsWithoutContentStatus(),
+            connection.listNewsIndexes(),
+            connection.listNewsSearchIndexes(),
+          ],
+          { concurrency: 'unbounded' },
+        );
 
       const problems: Array<string> = [];
       for (const index of indexes) {
@@ -127,7 +130,7 @@ function defineService({
         }
       }
 
-      return { target, count, latestTimestamp, missingEmbeddings, problems } satisfies TargetReport;
+      return { target, count, latestTimestamp, missingEmbeddings, missingContent, problems } satisfies TargetReport;
     }).pipe(Effect.scoped);
   }
 

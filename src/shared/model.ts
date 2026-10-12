@@ -1,4 +1,11 @@
-import { NEWS_TITLE_VECTOR_INDEX, TITLE_EMBEDDING_DIMENSIONS, TITLE_EMBEDDING_FIELD } from '#common/search';
+import {
+  CONTENT_EMBEDDING_DIMENSIONS,
+  CONTENT_EMBEDDING_FIELD,
+  CONTENT_STATUS_FIELD,
+  NEWS_TITLE_VECTOR_INDEX,
+  TITLE_EMBEDDING_DIMENSIONS,
+  TITLE_EMBEDDING_FIELD,
+} from '#common/search/search.constants';
 import { Equal } from 'effect';
 import type { Document, IndexDescription, SearchIndexDescription } from 'mongodb';
 
@@ -39,6 +46,10 @@ export const indexes: NamedIndexDescription[] = [
     key: { source: 1 },
     name: 'source_asc',
   },
+  {
+    key: { [CONTENT_STATUS_FIELD]: 1, timestamp: -1 },
+    name: 'content_status_timestamp',
+  },
 ];
 
 export const searchIndexes: NamedSearchIndexDescription[] = [
@@ -51,6 +62,12 @@ export const searchIndexes: NamedSearchIndexDescription[] = [
           type: 'vector',
           path: TITLE_EMBEDDING_FIELD,
           numDimensions: TITLE_EMBEDDING_DIMENSIONS,
+          similarity: 'cosine',
+        },
+        {
+          type: 'vector',
+          path: CONTENT_EMBEDDING_FIELD,
+          numDimensions: CONTENT_EMBEDDING_DIMENSIONS,
           similarity: 'cosine',
         },
         { type: 'filter', path: 'timestamp' },
