@@ -1,5 +1,10 @@
-import { TITLE_EMBEDDING_FIELD } from '#common/search';
-import type { Target } from '#common/targets';
+import {
+  CONTENT_EMBEDDING_FIELD,
+  CONTENT_STATUS,
+  CONTENT_STATUS_FIELD,
+  TITLE_EMBEDDING_FIELD,
+} from '#common/search/search.constants';
+import type { Target } from '#common/targets/targets';
 import { Context, Effect, Layer, Stream } from 'effect';
 import {
   MongoClient,
@@ -16,7 +21,16 @@ const DB_NAME = 'orfarchiv';
 const NEWS_COLLECTION = 'news';
 const CURSOR_BATCH_SIZE = 1000;
 const STORY_FIELDS: ReadonlyArray<string> = ['id', 'title', 'category', 'url', 'timestamp', 'source'];
-export const SYNC_FIELDS: ReadonlyArray<string> = [...STORY_FIELDS, TITLE_EMBEDDING_FIELD];
+const SYNC_FIELDS_WITHOUT_CONTENT: ReadonlyArray<string> = [...STORY_FIELDS, TITLE_EMBEDDING_FIELD];
+const SYNC_FIELDS: ReadonlyArray<string> = [
+  ...SYNC_FIELDS_WITHOUT_CONTENT,
+  CONTENT_EMBEDDING_FIELD,
+  CONTENT_STATUS_FIELD,
+];
+
+export function syncFieldsFor({ content }: { content: boolean }) {
+  return content ? SYNC_FIELDS : SYNC_FIELDS_WITHOUT_CONTENT;
+}
 
 export interface UpsertResult {
   readonly upserted: number;
@@ -61,10 +75,13 @@ function defineConnection(db: Db) {
   function streamAllNews() {
     return Stream.fromAsyncIterable(
       news
-        .find({}, { projection: { [TITLE_EMBEDDING_FIELD]: 0 }, batchSize: CURSOR_BATCH_SIZE })
+        .find(
+          {},
+          { projection: { [TITLE_EMBEDDING_FIELD]: 0, [CONTENT_EMBEDDING_FIELD]: 0 }, batchSize: CURSOR_BATCH_SIZE },
+        )
         .sort({ timestamp: -1 }),
       (error) => new DatabaseError({ message: 'Failed to fetch data.', cause: error }),
-    );
+    ).pipe(Stream.map(toBackupStory));
   }
 
   function streamNews({ since }: { since?: Date }) {
@@ -85,6 +102,23 @@ function defineConnection(db: Db) {
     return Effect.tryPromise({
       try: () => news.countDocuments({ [TITLE_EMBEDDING_FIELD]: { $exists: false } }),
       catch: (error) => new DatabaseError({ message: 'Failed to count stories without embedding.', cause: error }),
+    });
+  }
+
+  function countNewsWithoutContentStatus() {
+    return Effect.tryPromise({
+      try: () => news.countDocuments({ [CONTENT_STATUS_FIELD]: null }),
+      catch: (error) => new DatabaseError({ message: 'Failed to count stories without content status.', cause: error }),
+    });
+  }
+
+  function countNewsWithContent() {
+    return Effect.tryPromise({
+      try: () =>
+        news.countDocuments({
+          $or: [{ [CONTENT_EMBEDDING_FIELD]: { $exists: true } }, { [CONTENT_STATUS_FIELD]: { $exists: true } }],
+        }),
+      catch: (error) => new DatabaseError({ message: 'Failed to count stories with content.', cause: error }),
     });
   }
 
@@ -216,6 +250,8 @@ function defineConnection(db: Db) {
     streamNews,
     countNews,
     countNewsWithoutEmbedding,
+    countNewsWithoutContentStatus,
+    countNewsWithContent,
     latestNewsTimestamp,
     upsertNews,
     newsCollectionExists,
@@ -228,6 +264,16 @@ function defineConnection(db: Db) {
     createNewsSearchIndex,
     dropNewsSearchIndex,
   };
+}
+
+export function toBackupStory(story: Document): Document {
+  if (story[CONTENT_STATUS_FIELD] !== CONTENT_STATUS.embedded) {
+    return story;
+  }
+
+  const backupStory = { ...story };
+  delete backupStory[CONTENT_STATUS_FIELD];
+  return backupStory;
 }
 
 function sinceFilter(since: Date | undefined): Filter<Document> {

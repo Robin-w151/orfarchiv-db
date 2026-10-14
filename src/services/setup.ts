@@ -1,11 +1,23 @@
-import type { Target } from '#common/targets';
-import { Context, Effect, Layer, Result } from 'effect';
+import type { Target } from '#common/targets/targets';
+import { Context, Duration, Effect, Layer, Result, Schedule } from 'effect';
 import { formatError, SetupError } from '../shared/error';
-import { indexes, indexMatches, searchIndexDefinitionMatches, searchIndexes } from '../shared/model';
-import { Database, type DatabaseConnection } from './database';
+import {
+  CONTENT_STATUS_INDEX,
+  indexesFor,
+  indexMatches,
+  searchIndexDefinitionMatches,
+  searchIndexesFor,
+  type ContentCapability,
+  type NamedSearchIndexDescription,
+} from '../shared/model';
+import { Database, type DatabaseConnection, type SearchIndexState } from './database';
+
+const WAIT_SCHEDULE = Schedule.min([Schedule.exponential('1 second'), Schedule.spaced('30 seconds')]);
 
 export interface SetupOptions {
   readonly recreateSearchIndexes: boolean;
+  readonly waitUntilQueryable: boolean;
+  readonly waitTimeout: Duration.Duration;
 }
 
 export class Setup extends Context.Service<Setup>()('Setup', {
@@ -19,12 +31,12 @@ export class Setup extends Context.Service<Setup>()('Setup', {
 }
 
 function defineService({ database }: { database: typeof Database.Service }) {
-  function setup(targets: ReadonlyArray<Target>, { recreateSearchIndexes }: SetupOptions) {
+  function setup(targets: ReadonlyArray<Target>, options: SetupOptions) {
     return Effect.gen(function* () {
       const failedLabels: Array<string> = [];
 
       for (const target of targets) {
-        const result = yield* setupTarget(target, recreateSearchIndexes).pipe(Effect.result);
+        const result = yield* setupTarget(target, options).pipe(Effect.result);
         if (Result.isFailure(result)) {
           yield* Effect.logError(`Setup of '${target.label}' failed: ${formatError(result.failure)}`);
           failedLabels.push(target.label);
@@ -41,15 +53,15 @@ function defineService({ database }: { database: typeof Database.Service }) {
     });
   }
 
-  function setupTarget(target: Target, recreateSearchIndexes: boolean) {
+  function setupTarget(target: Target, options: SetupOptions) {
     return Effect.gen(function* () {
       yield* Effect.log(`[${target.label}] Connecting to server...`);
       const connection = yield* database.connect(target);
-      yield* setupDb(connection, recreateSearchIndexes);
+      yield* setupDb(connection, target, options);
     }).pipe(Effect.scoped);
   }
 
-  function setupDb(connection: DatabaseConnection, recreateSearchIndexes: boolean) {
+  function setupDb(connection: DatabaseConnection, capability: ContentCapability, options: SetupOptions) {
     return Effect.gen(function* () {
       yield* Effect.log('Creating orfarchiv DB...');
 
@@ -59,17 +71,22 @@ function defineService({ database }: { database: typeof Database.Service }) {
       }
 
       yield* Effect.log('Reconciling indexes...');
-      yield* reconcileIndexes(connection);
+      yield* reconcileIndexes(connection, capability);
 
       yield* Effect.log('Reconciling search indexes...');
-      yield* reconcileSearchIndexes(connection, recreateSearchIndexes);
+      yield* reconcileSearchIndexes(connection, capability, options);
     });
   }
 
-  function reconcileIndexes(connection: DatabaseConnection) {
+  function reconcileIndexes(connection: DatabaseConnection, capability: ContentCapability) {
     return Effect.gen(function* () {
       const existing = yield* connection.listNewsIndexes();
-      const pending = indexes.flatMap((index) => {
+      if (!capability.content && existing.some((index) => index.name === CONTENT_STATUS_INDEX)) {
+        yield* Effect.log(`Dropping index '${CONTENT_STATUS_INDEX}', target is excluded from content embeddings...`);
+        yield* connection.dropNewsIndex(CONTENT_STATUS_INDEX);
+      }
+
+      const pending = indexesFor(capability).flatMap((index) => {
         const current = existing.find((existing) => existing.name === index.name);
         return indexMatches(index, current) ? [] : [{ index, current }];
       });
@@ -98,24 +115,34 @@ function defineService({ database }: { database: typeof Database.Service }) {
     });
   }
 
-  function reconcileSearchIndexes(connection: DatabaseConnection, recreateSearchIndexes: boolean) {
+  function reconcileSearchIndexes(
+    connection: DatabaseConnection,
+    capability: ContentCapability,
+    options: SetupOptions,
+  ) {
     return Effect.gen(function* () {
       const existing = yield* connection.listNewsSearchIndexes();
       const changedNames: Array<string> = [];
 
-      for (const searchIndex of searchIndexes) {
+      for (const searchIndex of searchIndexesFor(capability)) {
         if (!existing.has(searchIndex.name)) {
           yield* Effect.log(`Creating search index '${searchIndex.name}'...`);
           yield* connection.createNewsSearchIndex(searchIndex);
+          if (options.waitUntilQueryable) {
+            yield* waitUntilQueryable(connection, searchIndex, options.waitTimeout);
+          }
           continue;
         }
 
         if (searchIndexDefinitionMatches(searchIndex.definition, existing.get(searchIndex.name)?.definition)) {
           yield* Effect.log(`Search index '${searchIndex.name}' is up to date.`);
+          if (options.waitUntilQueryable && !isQueryable(searchIndex, existing.get(searchIndex.name))) {
+            yield* waitUntilQueryable(connection, searchIndex, options.waitTimeout);
+          }
           continue;
         }
 
-        if (!recreateSearchIndexes) {
+        if (!options.recreateSearchIndexes) {
           yield* Effect.logWarning(`Search index '${searchIndex.name}' definition changed.`);
           changedNames.push(searchIndex.name);
           continue;
@@ -124,6 +151,9 @@ function defineService({ database }: { database: typeof Database.Service }) {
         yield* Effect.log(`Search index '${searchIndex.name}' definition changed, recreating...`);
         yield* connection.dropNewsSearchIndex(searchIndex.name);
         yield* connection.createNewsSearchIndex(searchIndex);
+        if (options.waitUntilQueryable) {
+          yield* waitUntilQueryable(connection, searchIndex, options.waitTimeout);
+        }
       }
 
       if (changedNames.length > 0) {
@@ -134,7 +164,60 @@ function defineService({ database }: { database: typeof Database.Service }) {
     });
   }
 
+  function waitUntilQueryable(
+    connection: DatabaseConnection,
+    searchIndex: NamedSearchIndexDescription,
+    timeout: Duration.Duration,
+  ) {
+    const check = Effect.gen(function* () {
+      const listResult = yield* connection.listNewsSearchIndexes().pipe(Effect.result);
+      if (Result.isFailure(listResult)) {
+        yield* Effect.logWarning(
+          `Search index '${searchIndex.name}': status unknown, retrying (${formatError(listResult.failure)})`,
+        );
+        return false;
+      }
+
+      const state = listResult.success.get(searchIndex.name);
+      yield* Effect.log(
+        `Search index '${searchIndex.name}': status ${state?.status ?? 'missing'}, queryable ${state?.queryable ?? false}`,
+      );
+      if (state?.status === 'FAILED') {
+        return yield* new SetupError({ message: `Search index '${searchIndex.name}' failed to build.` });
+      }
+      return isQueryable(searchIndex, state);
+    });
+
+    return Effect.gen(function* () {
+      yield* Effect.log(`Waiting until search index '${searchIndex.name}' is queryable...`);
+      const [elapsed] = yield* check.pipe(
+        Effect.repeat({ schedule: WAIT_SCHEDULE, until: (queryable) => queryable }),
+        Effect.timeoutOrElse({
+          duration: timeout,
+          orElse: () =>
+            Effect.fail(
+              new SetupError({
+                message: `Search index '${searchIndex.name}' did not become queryable within ${Duration.format(timeout)}. It keeps building in the background.`,
+              }),
+            ),
+        }),
+        Effect.timed,
+      );
+      yield* Effect.log(
+        `Search index '${searchIndex.name}' is queryable after ${Duration.format(Duration.seconds(Math.round(Duration.toSeconds(elapsed))))}.`,
+      );
+    });
+  }
+
   return {
     setup,
   };
+}
+
+function isQueryable(searchIndex: NamedSearchIndexDescription, state: SearchIndexState | undefined) {
+  return (
+    state?.status === 'READY' &&
+    state.queryable &&
+    searchIndexDefinitionMatches(searchIndex.definition, state.definition)
+  );
 }

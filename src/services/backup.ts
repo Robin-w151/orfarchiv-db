@@ -1,4 +1,4 @@
-import type { Target } from '#common/targets';
+import type { Target } from '#common/targets/targets';
 import { NodeFileSystem } from '@effect/platform-node';
 import { ByteSize, Context, Cron, Duration, Effect, FileSystem, Layer, Result, Schedule, Sink, Stream } from 'effect';
 import { join } from 'node:path';

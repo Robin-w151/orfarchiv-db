@@ -1,11 +1,24 @@
-import { NEWS_TITLE_VECTOR_INDEX, TITLE_EMBEDDING_DIMENSIONS, TITLE_EMBEDDING_FIELD } from '#common/search';
+import {
+  CONTENT_EMBEDDING_DIMENSIONS,
+  CONTENT_EMBEDDING_FIELD,
+  CONTENT_STATUS_FIELD,
+  NEWS_TITLE_VECTOR_INDEX,
+  TITLE_EMBEDDING_DIMENSIONS,
+  TITLE_EMBEDDING_FIELD,
+} from '#common/search/search.constants';
 import { Equal } from 'effect';
 import type { Document, IndexDescription, SearchIndexDescription } from 'mongodb';
 
 export type NamedIndexDescription = IndexDescription & { name: string };
 export type NamedSearchIndexDescription = SearchIndexDescription & { name: string };
 
-export const indexes: NamedIndexDescription[] = [
+export interface ContentCapability {
+  readonly content: boolean;
+}
+
+export const CONTENT_STATUS_INDEX = 'content_status_timestamp';
+
+const indexesWithoutContent: NamedIndexDescription[] = [
   {
     key: { id: 1 },
     name: 'id_asc',
@@ -41,25 +54,46 @@ export const indexes: NamedIndexDescription[] = [
   },
 ];
 
-export const searchIndexes: NamedSearchIndexDescription[] = [
-  {
-    name: NEWS_TITLE_VECTOR_INDEX,
-    type: 'vectorSearch',
-    definition: {
-      fields: [
-        {
-          type: 'vector',
-          path: TITLE_EMBEDDING_FIELD,
-          numDimensions: TITLE_EMBEDDING_DIMENSIONS,
-          similarity: 'cosine',
-        },
-        { type: 'filter', path: 'timestamp' },
-        { type: 'filter', path: 'source' },
-        { type: 'filter', path: 'category' },
-      ],
+const contentStatusIndex: NamedIndexDescription = {
+  key: { [CONTENT_STATUS_FIELD]: 1, timestamp: -1 },
+  name: CONTENT_STATUS_INDEX,
+};
+
+export function indexesFor({ content }: ContentCapability): NamedIndexDescription[] {
+  return content ? [...indexesWithoutContent, contentStatusIndex] : indexesWithoutContent;
+}
+
+export function searchIndexesFor({ content }: ContentCapability): NamedSearchIndexDescription[] {
+  return [
+    {
+      name: NEWS_TITLE_VECTOR_INDEX,
+      type: 'vectorSearch',
+      definition: {
+        fields: [
+          {
+            type: 'vector',
+            path: TITLE_EMBEDDING_FIELD,
+            numDimensions: TITLE_EMBEDDING_DIMENSIONS,
+            similarity: 'cosine',
+          },
+          ...(content
+            ? [
+                {
+                  type: 'vector',
+                  path: CONTENT_EMBEDDING_FIELD,
+                  numDimensions: CONTENT_EMBEDDING_DIMENSIONS,
+                  similarity: 'cosine',
+                },
+              ]
+            : []),
+          { type: 'filter', path: 'timestamp' },
+          { type: 'filter', path: 'source' },
+          { type: 'filter', path: 'category' },
+        ],
+      },
     },
-  },
-];
+  ];
+}
 
 export function indexMatches(expected: NamedIndexDescription, actual: Document | undefined): boolean {
   return (
