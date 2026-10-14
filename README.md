@@ -17,7 +17,8 @@ The following environment variables are available:
   `<cluster>.mongodb.net`) that never hold content embeddings. `setup` creates their `news_title_vector` index without
   the `contentEmbedding` path and without the `content_status_timestamp` index, `sync` doesn't copy `contentEmbedding`
   and `contentStatus` to them, and `verify` fails if they contain either field. `targets` shows each target's
-  capability. Default: empty, every target gets content.
+  capability. If unset, it falls back to empty and every target gets content. The checked-in `.env` excludes
+  `orfarchiv-db-2`.
 
 ## Setup
 
