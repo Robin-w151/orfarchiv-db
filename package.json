@@ -15,20 +15,20 @@
     "prepare": "husky"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.5",
+    "@effect/platform-node": "4.1.1",
     "dotenv-flow": "4.1.0",
-    "effect": "4.0.5",
-    "mongodb": "7.7.0",
+    "effect": "4.1.1",
+    "mongodb": "7.8.0",
     "winston": "3.19.0"
   },
   "devDependencies": {
-    "@commitlint/cli": "21.2.3",
-    "@commitlint/config-conventional": "21.2.3",
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
     "@eslint/js": "10.0.1",
     "@semantic-release/git": "11.0.1",
     "@types/node": "24.19.2",
-    "bun": "1.4.3",
-    "eslint": "10.13.0",
+    "bun": "1.4.4",
+    "eslint": "10.14.0",
     "eslint-config-prettier": "10.1.8",
     "eslint-config-recommended": "4.1.0",
     "eslint-plugin-prettier": "5.5.7",
@@ -39,8 +39,8 @@
     "semantic-release": "25.0.9",
     "semantic-release-gha-output": "1.1.6",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.71.2",
-    "vite": "8.3.4",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.5",
     "vitest": "5.0.5"
   },
   "overrides": {
