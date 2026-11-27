@@ -1,8 +1,9 @@
-import { Duration, Effect } from 'effect';
+import { Effect } from 'effect';
 import { Command, Flag } from 'effect/cli';
 import { Setup } from '../services/setup';
 import { Targets } from '../services/targets';
 import { dbCommand } from './db';
+import { formatDurationError, parseDuration } from './flags';
 
 const DEFAULT_WAIT_TIMEOUT = '30 minutes';
 
@@ -19,10 +20,7 @@ export const setupCommand = Command.make(
     ),
     waitTimeout: Flag.String('wait-timeout').pipe(
       Flag.withDefault(DEFAULT_WAIT_TIMEOUT),
-      Flag.mapTryCatch(
-        (input) => Duration.fromInputUnsafe(input as Duration.Input),
-        (error) => `a valid duration, e.g. '30 minutes' (${error instanceof Error ? error.message : error})`,
-      ),
+      Flag.mapTryCatch(parseDuration, formatDurationError),
       Flag.withDescription(
         `Maximum time to wait for a search index with --wait-until-queryable (default: ${DEFAULT_WAIT_TIMEOUT})`,
       ),

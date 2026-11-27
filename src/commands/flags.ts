@@ -1,4 +1,4 @@
-import { Cron } from 'effect';
+import { Cron, Duration } from 'effect';
 import { Flag } from 'effect/cli';
 
 export const keepRunningFlag = Flag.Boolean('keep-running').pipe(
@@ -15,4 +15,12 @@ export function cronFlag(defaultCron: string, description: string) {
     ),
     Flag.withDescription(`Interval in cron syntax (default: ${defaultCron}, ${description})`),
   );
+}
+
+export function parseDuration(input: string): Duration.Duration {
+  return Duration.fromInputUnsafe(input as Duration.Input);
+}
+
+export function formatDurationError(error: unknown): string {
+  return `a valid duration, e.g. '30 minutes' (${error instanceof Error ? error.message : error})`;
 }

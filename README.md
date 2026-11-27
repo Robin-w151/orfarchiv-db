@@ -13,6 +13,8 @@ The following environment variables are available:
 
 - ORFARCHIV_DB_URL
 - ORFARCHIV_BACKUP_DIR
+- ORFARCHIV_BACKUP_TIMEOUT: maximum duration of a single target backup (e.g. `1 hour`, default: `15 minutes`). The
+  `backup --timeout` flag takes precedence.
 - ORFARCHIV_CONTENT_EMBEDDING_EXCLUDED_TARGETS: target labels separated by `;` (e.g. the Atlas M0
   `<cluster>.mongodb.net`) that never hold content embeddings. `setup` creates their `news_title_vector` index without
   the `contentEmbedding` path and without the `content_status_timestamp` index, `sync` doesn't copy `contentEmbedding`

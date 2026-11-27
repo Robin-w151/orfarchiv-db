@@ -1,6 +1,19 @@
 import type { Target } from '#common/targets/targets';
 import { NodeFileSystem } from '@effect/platform-node';
-import { ByteSize, Context, Cron, Duration, Effect, FileSystem, Layer, Result, Schedule, Sink, Stream } from 'effect';
+import {
+  ByteSize,
+  Context,
+  Cron,
+  Duration,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Result,
+  Schedule,
+  Sink,
+  Stream,
+} from 'effect';
 import { join } from 'node:path';
 import {
   diskUsage,
@@ -16,13 +29,13 @@ import { Database } from './database';
 import { Environment } from './env';
 import { logNotificationState, Notifier } from './notifier';
 
-const BACKUP_TIMEOUT = Duration.minutes(15);
 const WRITE_BATCH_SIZE = 1000;
 
 export interface BackupOptions {
   readonly retention?: RetentionPolicy;
   readonly diskPaths: ReadonlyArray<string>;
   readonly diskMaxUsage: DiskLimit;
+  readonly timeout: Option.Option<Duration.Duration>;
 }
 
 export class Backup extends Context.Service<Backup>()('Backup', {
@@ -56,15 +69,15 @@ function defineService({
 }) {
   function createBackup(targets: ReadonlyArray<Target>, options: BackupOptions) {
     return Effect.gen(function* () {
+      const timeout = yield* resolveTimeout(options);
       const results = yield* Effect.forEach(
         targets,
         (target) =>
           Effect.gen(function* () {
             const result = yield* backupTarget(target).pipe(
               Effect.timeoutOrElse({
-                duration: BACKUP_TIMEOUT,
-                orElse: () =>
-                  Effect.fail(new BackupError({ message: `Timed out after ${Duration.format(BACKUP_TIMEOUT)}.` })),
+                duration: timeout,
+                orElse: () => Effect.fail(new BackupError({ message: `Timed out after ${Duration.format(timeout)}.` })),
               }),
               Effect.result,
             );
@@ -87,6 +100,23 @@ function defineService({
       if (results.every(Result.isFailure)) {
         return yield* new BackupError({ message: `All ${targets.length} backup targets failed.` });
       }
+    });
+  }
+
+  function resolveTimeout(options: BackupOptions) {
+    return Effect.gen(function* () {
+      if (Option.isSome(options.timeout)) {
+        return options.timeout.value;
+      }
+
+      const value = yield* environment.backupTimeout;
+      return yield* Effect.try({
+        try: () => Duration.fromInputUnsafe(value as Duration.Input),
+        catch: (error) =>
+          new BackupError({
+            message: `Invalid ORFARCHIV_BACKUP_TIMEOUT '${value}': ${error instanceof Error ? error.message : error}`,
+          }),
+      });
     });
   }
 
