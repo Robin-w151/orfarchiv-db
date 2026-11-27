@@ -3,8 +3,9 @@ import { Command, Flag } from 'effect/cli';
 import { Backup } from '../services/backup';
 import { Targets } from '../services/targets';
 import { parseDiskLimit } from '../shared/disk';
+import { durationExpectation, parseDuration } from '../shared/duration';
 import { dbCommand } from './db';
-import { cronFlag, formatDurationError, keepRunningFlag, parseDuration } from './flags';
+import { cronFlag, keepRunningFlag } from './flags';
 
 const countFlag = (name: string, description: string) =>
   Flag.Int(name).pipe(
@@ -33,7 +34,7 @@ export const backupCommand = Command.make(
       Flag.withDescription('Notify when a disk path reaches this usage, e.g. 80% or 60GiB (default: 80%)'),
     ),
     timeout: Flag.String('timeout').pipe(
-      Flag.mapTryCatch(parseDuration, formatDurationError),
+      Flag.mapTryCatch(parseDuration, durationExpectation),
       Flag.optional,
       Flag.withDescription(
         'Maximum duration of a single target backup, e.g. 1 hour (default: ORFARCHIV_BACKUP_TIMEOUT or 15 minutes)',

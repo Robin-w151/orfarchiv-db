@@ -23,6 +23,7 @@ import {
   formatDiskUsage,
   type DiskLimit,
 } from '../shared/disk';
+import { parseDuration } from '../shared/duration';
 import { BackupError, formatDefect, formatError, IOError } from '../shared/error';
 import { selectBackupsToPrune, type RetentionPolicy } from '../shared/retention';
 import { Database } from './database';
@@ -68,8 +69,11 @@ function defineService({
   notifier: typeof Notifier.Service;
 }) {
   function createBackup(targets: ReadonlyArray<Target>, options: BackupOptions) {
+    return resolveTimeout(options).pipe(Effect.flatMap((timeout) => runBackups(targets, options, timeout)));
+  }
+
+  function runBackups(targets: ReadonlyArray<Target>, options: BackupOptions, timeout: Duration.Duration) {
     return Effect.gen(function* () {
-      const timeout = yield* resolveTimeout(options);
       const results = yield* Effect.forEach(
         targets,
         (target) =>
@@ -111,7 +115,7 @@ function defineService({
 
       const value = yield* environment.backupTimeout;
       return yield* Effect.try({
-        try: () => Duration.fromInputUnsafe(value as Duration.Input),
+        try: () => parseDuration(value),
         catch: (error) =>
           new BackupError({
             message: `Invalid ORFARCHIV_BACKUP_TIMEOUT '${value}': ${error instanceof Error ? error.message : error}`,
@@ -123,9 +127,10 @@ function defineService({
   function scheduleBackups(cron: Cron.Cron, targets: ReadonlyArray<Target>, options: BackupOptions) {
     return Effect.gen(function* () {
       yield* logNotificationState(notifier);
+      const timeout = yield* resolveTimeout(options);
       const schedule = Schedule.cron(cron);
       yield* Effect.schedule(
-        createBackup(targets, options).pipe(
+        runBackups(targets, options, timeout).pipe(
           Effect.catchTag('BackupError', (error) => Effect.logWarning(error.message)),
           Effect.catchDefect((defect) =>
             Effect.gen(function* () {
