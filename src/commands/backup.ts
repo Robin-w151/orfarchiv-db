@@ -3,6 +3,7 @@ import { Command, Flag } from 'effect/cli';
 import { Backup } from '../services/backup';
 import { Targets } from '../services/targets';
 import { parseDiskLimit } from '../shared/disk';
+import { durationExpectation, parseDuration } from '../shared/duration';
 import { dbCommand } from './db';
 import { cronFlag, keepRunningFlag } from './flags';
 
@@ -32,8 +33,15 @@ export const backupCommand = Command.make(
       Flag.mapTryCatch(parseDiskLimit, (error) => (error instanceof Error ? error.message : String(error))),
       Flag.withDescription('Notify when a disk path reaches this usage, e.g. 80% or 60GiB (default: 80%)'),
     ),
+    timeout: Flag.String('timeout').pipe(
+      Flag.mapTryCatch(parseDuration, durationExpectation),
+      Flag.optional,
+      Flag.withDescription(
+        'Maximum duration of a single target backup, e.g. 1 hour (default: ORFARCHIV_BACKUP_TIMEOUT or 15 minutes)',
+      ),
+    ),
   },
-  ({ keepRunning, cron, keepDaily, keepMonthly, diskPaths, diskMaxUsage }) =>
+  ({ keepRunning, cron, keepDaily, keepMonthly, diskPaths, diskMaxUsage, timeout }) =>
     Effect.gen(function* () {
       const { target } = yield* dbCommand;
       const targetsService = yield* Targets;
@@ -46,6 +54,7 @@ export const backupCommand = Command.make(
             : undefined,
         diskPaths,
         diskMaxUsage,
+        timeout,
       };
       yield* keepRunning ? backup.scheduleBackups(cron, targets, options) : backup.createBackup(targets, options);
     }),
@@ -63,5 +72,6 @@ export const backupCommand = Command.make(
       command: 'db backup --disk-path /app/backup --disk-path /data/db --disk-max-usage 60GiB',
       description: 'Create a backup, then notify if either path has 60 GiB or more in use',
     },
+    { command: 'db backup --timeout "1 hour"', description: 'Create a backup, aborting each target after 1 hour' },
   ]),
 );

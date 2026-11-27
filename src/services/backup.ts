@@ -1,6 +1,19 @@
 import type { Target } from '#common/targets/targets';
 import { NodeFileSystem } from '@effect/platform-node';
-import { ByteSize, Context, Cron, Duration, Effect, FileSystem, Layer, Result, Schedule, Sink, Stream } from 'effect';
+import {
+  ByteSize,
+  Context,
+  Cron,
+  Duration,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Result,
+  Schedule,
+  Sink,
+  Stream,
+} from 'effect';
 import { join } from 'node:path';
 import {
   diskUsage,
@@ -10,19 +23,20 @@ import {
   formatDiskUsage,
   type DiskLimit,
 } from '../shared/disk';
+import { parseDuration } from '../shared/duration';
 import { BackupError, formatDefect, formatError, IOError } from '../shared/error';
 import { selectBackupsToPrune, type RetentionPolicy } from '../shared/retention';
 import { Database } from './database';
 import { Environment } from './env';
 import { logNotificationState, Notifier } from './notifier';
 
-const BACKUP_TIMEOUT = Duration.minutes(15);
 const WRITE_BATCH_SIZE = 1000;
 
 export interface BackupOptions {
   readonly retention?: RetentionPolicy;
   readonly diskPaths: ReadonlyArray<string>;
   readonly diskMaxUsage: DiskLimit;
+  readonly timeout: Option.Option<Duration.Duration>;
 }
 
 export class Backup extends Context.Service<Backup>()('Backup', {
@@ -55,6 +69,10 @@ function defineService({
   notifier: typeof Notifier.Service;
 }) {
   function createBackup(targets: ReadonlyArray<Target>, options: BackupOptions) {
+    return resolveTimeout(options).pipe(Effect.flatMap((timeout) => runBackups(targets, options, timeout)));
+  }
+
+  function runBackups(targets: ReadonlyArray<Target>, options: BackupOptions, timeout: Duration.Duration) {
     return Effect.gen(function* () {
       const results = yield* Effect.forEach(
         targets,
@@ -62,9 +80,8 @@ function defineService({
           Effect.gen(function* () {
             const result = yield* backupTarget(target).pipe(
               Effect.timeoutOrElse({
-                duration: BACKUP_TIMEOUT,
-                orElse: () =>
-                  Effect.fail(new BackupError({ message: `Timed out after ${Duration.format(BACKUP_TIMEOUT)}.` })),
+                duration: timeout,
+                orElse: () => Effect.fail(new BackupError({ message: `Timed out after ${Duration.format(timeout)}.` })),
               }),
               Effect.result,
             );
@@ -90,12 +107,30 @@ function defineService({
     });
   }
 
+  function resolveTimeout(options: BackupOptions) {
+    return Effect.gen(function* () {
+      if (Option.isSome(options.timeout)) {
+        return options.timeout.value;
+      }
+
+      const value = yield* environment.backupTimeout;
+      return yield* Effect.try({
+        try: () => parseDuration(value),
+        catch: (error) =>
+          new BackupError({
+            message: `Invalid ORFARCHIV_BACKUP_TIMEOUT '${value}': ${error instanceof Error ? error.message : error}`,
+          }),
+      });
+    });
+  }
+
   function scheduleBackups(cron: Cron.Cron, targets: ReadonlyArray<Target>, options: BackupOptions) {
     return Effect.gen(function* () {
       yield* logNotificationState(notifier);
+      const timeout = yield* resolveTimeout(options);
       const schedule = Schedule.cron(cron);
       yield* Effect.schedule(
-        createBackup(targets, options).pipe(
+        runBackups(targets, options, timeout).pipe(
           Effect.catchTag('BackupError', (error) => Effect.logWarning(error.message)),
           Effect.catchDefect((defect) =>
             Effect.gen(function* () {

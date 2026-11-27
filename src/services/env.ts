@@ -64,6 +64,7 @@ function defineService({ fs }: { fs: FileSystem.FileSystem }) {
       dbConnectionUrl,
       dbTargets,
       backupDir: loadEnvVariable('ORFARCHIV_BACKUP_DIR', './backup'),
+      backupTimeout: loadEnvVariable('ORFARCHIV_BACKUP_TIMEOUT', '15 minutes'),
       serverLabel: loadEnvVariable('ORFARCHIV_SERVER_LABEL', hostname()),
       telegramBotToken: loadEnvVariable('ORFARCHIV_TELEGRAM_BOT_TOKEN', ''),
       telegramChatId: loadEnvVariable('ORFARCHIV_TELEGRAM_CHAT_ID', ''),
